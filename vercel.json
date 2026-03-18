@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "main.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "main.js"
+    }
+  ],
+  "env": {
+    "ANTHROPIC_API_KEY": "@anthropic_api_key",
+    "TELEGRAM_BOT_TOKEN": "@telegram_bot_token"
+  }
+}
