@@ -2,18 +2,17 @@
   "version": 2,
   "builds": [
     {
-      "src": "main.js",
-      "use": "@vercel/node"
+      "src": "main.py",
+      "use": "@vercel/python"
     }
   ],
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "main.js"
+      "dest": "main.py"
     }
   ],
   "env": {
-    "ANTHROPIC_API_KEY": "@anthropic_api_key",
-    "TELEGRAM_BOT_TOKEN": "@telegram_bot_token"
+    "PROFILE": "bash_pt"
   }
 }

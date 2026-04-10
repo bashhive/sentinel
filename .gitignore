@@ -1,68 +1,42 @@
-# Environment
-.env
-.env.local
-.env.*.local
-
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
+*.pyc
+*.pyo
+*.pyd
 *.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# Virtual environments
+dist/
+build/
+.eggs/
 venv/
-env/
-ENV/
-env.bak/
-venv.bak/
+.venv/
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
+# Env
+.env
+*.env
 
 # Logs
-*.log
 logs/
+*.log
 
 # Database
 *.db
 *.sqlite
-*.sqlite3
 
-# Memory files
-memory/
-conversations/
+# macOS
+.DS_Store
 
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
+# Editors
+.vscode/
+.idea/
+*.swp
 
-# Misc
-.cache/
-dist/
-build/
-*.pyc
+# Vercel
+.vercel/
+
+# Archive (kept in repo for reference, nothing sensitive)
+# _archive/ — intentionally tracked
+
+# node (archive only, not active)
+node_modules/
+_archive/aspasia_original/
+_archive/node_modules/
