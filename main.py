@@ -15,6 +15,7 @@ import uvicorn
 from config.base import load_config
 from core.agent import Agent
 from core.claude_client import ClaudeClient
+from core.tools import ToolRegistry
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_profile(profile_name: str) -> dict:
-    """Dynamically import profiles/<name>/profile.py and return PROFILE dict."""
+    """Dynamically import profiles/<n>/profile.py and return PROFILE dict."""
     try:
         module = importlib.import_module(f"profiles.{profile_name}.profile")
         return module.PROFILE
@@ -40,15 +41,19 @@ async def main() -> None:
     logger.info(f"Environment : {cfg.environment}")
     logger.info(f"Profile     : {cfg.profile}")
 
-
     # 2. Load profile
     profile = load_profile(cfg.profile)
     agent_cfg = cfg.to_agent_config(profile)
     logger.info(f"Agent       : {agent_cfg['agent_name']} ({agent_cfg['model']})")
 
-    # 3. Build core
+    # 3. Build core — tools first so profile can extend them
+    tools = ToolRegistry()
+    if callable(profile.get("register_tools")):
+        profile["register_tools"](tools)
+        logger.info(f"Tools       : {[t.name for t in tools.list_all()]}")
+
     client = ClaudeClient(api_key=cfg.anthropic_api_key)
-    agent  = Agent(config=agent_cfg, client=client)
+    agent  = Agent(config=agent_cfg, client=client, tools=tools)
 
     # 4. Mount web adapter (always on — it's the API contract)
     if profile.get("web_enabled", True):
@@ -76,7 +81,7 @@ async def main() -> None:
         logger.info("Telegram adapter: disabled")
 
     # 6. Run
-    logger.info(f"Web API: http://{cfg.host}:{cfg.port}")
+    logger.info(f"Web API     : http://{cfg.host}:{cfg.port}")
 
     server_cfg = uvicorn.Config(
         web_app,
@@ -87,7 +92,6 @@ async def main() -> None:
     server = uvicorn.Server(server_cfg)
 
     if telegram_adapter:
-        # Run both concurrently
         await asyncio.gather(
             server.serve(),
             telegram_adapter.run_polling(),

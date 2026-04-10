@@ -5,16 +5,12 @@ description = "Multi-site reusable AI bot — core + adapters + profiles"
 requires-python = ">=3.11"
 
 dependencies = [
-    # AI
     "anthropic>=0.85.0",
-    # Web adapter
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.30.0",
     "pydantic>=2.7.0",
     "pydantic-settings>=2.3.0",
-    # Telegram adapter (optional — only needed when profile enables it)
     "python-telegram-bot>=21.5",
-    # Utils
     "python-dotenv>=1.0.0",
     "httpx>=0.27.0",
 ]
@@ -22,8 +18,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "httpx>=0.27.0",      # TestClient
+    "pytest-asyncio==0.23.8",
+    "httpx>=0.27.0",
     "ruff>=0.4.0",
 ]
 
@@ -31,8 +27,12 @@ dev = [
 aspasia = "main:main"
 
 [build-system]
-requires = ["setuptools>=70"]
-build-backend = "setuptools.backends.legacy:build"
+requires = ["setuptools>=70", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["_archive*", "tests*", ".venv*"]
 
 [tool.ruff]
 line-length = 100
@@ -40,3 +40,4 @@ target-version = "py311"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+testpaths = ["tests"]

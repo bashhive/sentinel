@@ -95,13 +95,15 @@ class ToolRegistry:
 
     @staticmethod
     def _handle_calculate(expression: str) -> dict:
-        """Safe eval using ast — no builtins, no exec."""
+        """Safe eval using ast — no builtins, no exec.
+        Uses ast.Constant (py3.8+), ast.Num kept for py3.7 compat only.
+        """
         try:
             tree = ast.parse(expression, mode="eval")
-            # Whitelist: only literals and arithmetic operators
+            # Whitelist: literals and arithmetic operators only
             allowed = (
                 ast.Expression, ast.BinOp, ast.UnaryOp,
-                ast.Num, ast.Constant,   # py3.8+
+                ast.Constant,           # py3.8+ (covers numbers, strings, booleans)
                 ast.Add, ast.Sub, ast.Mult, ast.Div,
                 ast.FloorDiv, ast.Mod, ast.Pow,
                 ast.USub, ast.UAdd,
@@ -109,7 +111,7 @@ class ToolRegistry:
             for node in ast.walk(tree):
                 if not isinstance(node, allowed):
                     return {"error": f"Disallowed operation: {type(node).__name__}"}
-            result = eval(compile(tree, "<string>", "eval"))
+            result = eval(compile(tree, "<string>", "eval"))  # noqa: S307
             return {"result": result, "expression": expression}
         except Exception as e:
             return {"error": str(e), "expression": expression}
