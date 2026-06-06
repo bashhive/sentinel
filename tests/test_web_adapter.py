@@ -12,14 +12,17 @@ from adapters.web.app import create_app
 
 
 def make_agent(reply: str = "Test reply") -> Agent:
-    """Build an Agent with a mocked ClaudeClient."""
+    """Build an Agent with a mocked LLM client."""
     mock_client = MagicMock()
-    mock_client.chat = AsyncMock(return_value=reply)
+    # chat_raw returns text blocks — no tool calls in adapter tests
+    mock_client.chat_raw = AsyncMock(
+        return_value=[{"type": "text", "text": reply}]
+    )
     mock_client.health_check = AsyncMock(return_value=True)
     return Agent(
         config={
             "agent_name": "TestBot",
-            "model": "claude-3-5-sonnet-20241022",
+            "model": "llama-3.3-70b-versatile",
             "max_tokens": 100,
             "temperature": 0.5,
             "system_prompt": "You are a test bot.",
@@ -45,7 +48,7 @@ class TestHealthEndpoints:
         assert r.status_code == 200
         data = r.json()
         assert data["agent"] == "healthy"
-        assert data["claude"] == "healthy"
+        assert data["llm"] == "healthy"
 
     def test_status(self):
         r = self.client.get("/api/status")
@@ -72,7 +75,7 @@ class TestChatEndpoint:
         r = self.client.post("/api/chat", json={"message": "hello"})
         assert r.status_code == 200
         data = r.json()
-        assert "message" in data          # widget reads data.message
+        assert "message" in data
         assert data["message"] == "Olá!"
         assert "session_id" in data
 
@@ -85,7 +88,6 @@ class TestChatEndpoint:
         assert r.json()["session_id"] == "default"
 
     def test_empty_message_rejected(self):
-        # pydantic will reject missing required field
         r = self.client.post("/api/chat", json={})
         assert r.status_code == 422
 

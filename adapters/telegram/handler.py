@@ -74,7 +74,7 @@ class TelegramAdapter:
             text = (
                 f"*{self.agent.name} — estado*\n\n"
                 f"Agent: {health['agent']}\n"
-                f"Claude API: {health['claude']}\n"
+                f"LLM: {health['llm']}\n"
                 f"Utilizadores: {stats['memory']['total_users']}\n"
                 f"Mensagens: {stats['memory']['total_messages']}"
             )

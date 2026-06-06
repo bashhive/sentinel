@@ -40,7 +40,7 @@ def create_app(
     agent: Agent,
     cors_origins: list[str] = None,
     api_key: Optional[str] = None,
-    title: str = "Aspasia API",
+    title: str = "HiveSec Sentinel API",
 ) -> FastAPI:
     """
     Build and return a configured FastAPI instance.

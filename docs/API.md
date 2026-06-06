@@ -1,5 +1,8 @@
 # Aspasia API Documentation
 
+> ⚠️ **Outdated (v1).** Describes the legacy `aspasia/...` layout. The current
+> product is **HiveSec Sentinel** — see the root `README.md` for the live API.
+
 Complete REST API reference for Aspasia.
 
 ## Base URL

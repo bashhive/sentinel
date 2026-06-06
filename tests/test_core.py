@@ -27,7 +27,7 @@ class TestMemorySystem:
         for i in range(10):
             self.mem.add_message("u1", "user", f"msg {i}")
         history = self.mem.get_conversation("u1", limit=100)
-        assert len(history) == 5  # trimmed to max_history
+        assert len(history) == 5
 
     def test_clear_history(self):
         self.mem.add_message("u1", "user", "hello")
@@ -58,7 +58,6 @@ class TestMemorySystem:
         assert len(self.mem.get_conversation("u2")) == 1
 
 
-
 # ── ToolRegistry ──────────────────────────────────────────────────────────────
 
 class TestToolRegistry:
@@ -80,7 +79,6 @@ class TestToolRegistry:
         assert result["result"] == 8
 
     def test_calculate_safe_eval(self):
-        # Must NOT execute arbitrary code
         result = self.reg.execute("calculate", expression="__import__('os').getcwd()")
         assert "error" in result
 
@@ -115,15 +113,17 @@ class TestToolRegistry:
 
 class TestAgent:
     def setup_method(self):
-        # Mock ClaudeClient — no real API calls
         self.mock_client = MagicMock()
-        self.mock_client.chat = AsyncMock(return_value="Mocked reply")
+        # chat_raw returns text blocks (no tool calls in unit tests)
+        self.mock_client.chat_raw = AsyncMock(
+            return_value=[{"type": "text", "text": "Mocked reply"}]
+        )
         self.mock_client.health_check = AsyncMock(return_value=True)
 
         self.agent = Agent(
             config={
                 "agent_name": "TestBot",
-                "model": "claude-3-5-sonnet-20241022",
+                "model": "llama-3.3-70b-versatile",
                 "max_tokens": 100,
                 "temperature": 0.5,
                 "system_prompt": "You are a test bot.",
@@ -143,8 +143,7 @@ class TestAgent:
         await self.agent.process_message("u1", "first")
         await self.agent.process_message("u1", "second")
         history = self.agent.memory.get_conversation("u1")
-        # 2 user + 2 assistant = 4
-        assert len(history) == 4
+        assert len(history) == 4  # 2 user + 2 assistant
 
     @pytest.mark.asyncio
     async def test_clear_history(self):
@@ -156,11 +155,11 @@ class TestAgent:
     async def test_health_check(self):
         health = await self.agent.health_check()
         assert health["agent"] == "healthy"
-        assert health["claude"] == "healthy"
+        assert health["llm"] == "healthy"
 
     @pytest.mark.asyncio
     async def test_error_handling(self):
-        self.mock_client.chat = AsyncMock(side_effect=Exception("API down"))
+        self.mock_client.chat_raw = AsyncMock(side_effect=Exception("API down"))
         resp = await self.agent.process_message("u1", "hello")
         assert resp.metadata.get("error") is True
 
@@ -169,3 +168,23 @@ class TestAgent:
         assert stats["agent_name"] == "TestBot"
         assert "memory" in stats
         assert "tools" in stats
+
+    @pytest.mark.asyncio
+    async def test_tool_loop_executes_tool(self):
+        """Agent should execute tool and send result back to Claude."""
+        call_count = 0
+
+        async def mock_raw(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call: Claude requests a tool
+                return [{"type": "tool_use", "id": "t1", "name": "get_time", "input": {}}]
+            else:
+                # Second call: Claude responds after seeing tool result
+                return [{"type": "text", "text": "The time is now."}]
+
+        self.mock_client.chat_raw = mock_raw
+        resp = await self.agent.process_message("u1", "what time is it?")
+        assert resp.text == "The time is now."
+        assert call_count == 2

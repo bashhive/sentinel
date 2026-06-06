@@ -1,5 +1,9 @@
 # Deployment Guide for Aspasia
 
+> ⚠️ **Outdated (v1).** Describes the legacy `aspasia/...` layout and Anthropic-only
+> setup. The current product is **HiveSec Sentinel** (free-tier Groq by default) —
+> see the root `README.md` for current deploy steps.
+
 Complete guide for deploying Aspasia in production environments.
 
 ## Table of Contents

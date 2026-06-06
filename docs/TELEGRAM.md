@@ -16,8 +16,8 @@ Complete guide to setting up and using Aspasia as a Telegram bot.
 2. Start a conversation: `/start`
 3. Create a new bot: `/newbot`
 4. Follow the prompts:
-   - Choose a name (display name): **Aspasia**
-   - Choose a username (must end with 'bot'): **aspasia_ai_bot** or similar
+   - Choose a name (display name): **HiveSec Sentinel**
+   - Choose a username (must end with 'bot'): **hivesecsentinelbot**
 5. BotFather will give you the **API Token**
 
 Example token:
@@ -32,7 +32,7 @@ Still in BotFather:
 ```
 /setcommands
 
-Select your bot: aspasia_ai_bot
+Select your bot: hivesecsentinelbot
 
 Commands:
 start - Start the conversation
@@ -46,9 +46,9 @@ status - Show bot status
 ```
 /setdescription
 
-Select: aspasia_ai_bot
+Select: hivesecsentinelbot
 
-Description: Aspasia - Autonomous AI Assistant. Chat with an intelligent AI agent powered by Claude.
+Description: HiveSec Sentinel — AI security assistant for alerts, guidance and security topics.
 ```
 
 ### Step 4: Set Bot About Text
@@ -56,9 +56,9 @@ Description: Aspasia - Autonomous AI Assistant. Chat with an intelligent AI agen
 ```
 /setabouttext
 
-Select: aspasia_ai_bot
+Select: hivesecsentinelbot
 
-About: I'm Aspasia, an autonomous AI agent. I can help you with questions, conversations, and problem-solving!
+About: I'm HiveSec Sentinel — an AI security assistant for alerts, guidance and security topics.
 ```
 
 ## Configuration

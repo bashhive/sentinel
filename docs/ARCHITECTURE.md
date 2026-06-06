@@ -1,5 +1,8 @@
 # Aspasia System Architecture
 
+> ⚠️ **Outdated (v1).** Describes the legacy `aspasia/...` layout. The current
+> product is **HiveSec Sentinel** — see the root `README.md` for the live design.
+
 Overview of Aspasia's design and component architecture.
 
 ## High-Level Architecture

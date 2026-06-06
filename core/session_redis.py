@@ -30,13 +30,13 @@ except ImportError:
 class RedisMemorySystem:
     """
     Per-user conversation history stored in Redis.
-    Keys: aspasia:{user_id}:history  (JSON list)
-          aspasia:{user_id}:meta     (JSON dict: preferences, facts)
+    Keys: hivesec:{user_id}:history  (JSON list)
+          hivesec:{user_id}:meta     (JSON dict: preferences, facts)
 
     TTL: 24h by default (configurable). Sessions expire after inactivity.
     """
 
-    PREFIX = "aspasia"
+    PREFIX = "hivesec"
     DEFAULT_TTL = 86_400  # 24 hours in seconds
 
     def __init__(

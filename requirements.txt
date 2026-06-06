@@ -1,0 +1,7 @@
+# Runtime deps for Vercel @vercel/python (serverless ASGI).
+# Free-tier LLM path needs no vendor SDK — just httpx.
+fastapi>=0.111.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+httpx>=0.27.0
+python-dotenv>=1.0.0

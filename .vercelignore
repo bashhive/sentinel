@@ -1,0 +1,12 @@
+.venv
+.git
+.pytest_cache
+__pycache__
+**/__pycache__
+.env
+tests
+docs
+.DS_Store
+**/.DS_Store
+Dockerfile
+support

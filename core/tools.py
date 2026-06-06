@@ -9,6 +9,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Optional
 
+# JSON Schema property keys that are NOT valid and must be stripped before
+# sending to the Anthropic API.
+_INTERNAL_KEYS = {"required"}
+
 
 class ToolType(Enum):
     INFORMATION = "information"
@@ -26,14 +30,23 @@ class Tool:
     requires_approval: bool = False
 
     def to_claude_dict(self) -> dict:
+        # Build clean properties — strip internal keys like "required"
+        properties = {
+            k: {pk: pv for pk, pv in v.items() if pk not in _INTERNAL_KEYS}
+            for k, v in self.parameters.items()
+        }
+        # required list — only params whose "required" key is True (default True)
+        required = [
+            k for k, v in self.parameters.items()
+            if v.get("required", True) is not False
+        ]
+        schema: dict[str, Any] = {"type": "object", "properties": properties}
+        if required:
+            schema["required"] = required
         return {
             "name": self.name,
             "description": self.description,
-            "input_schema": {
-                "type": "object",
-                "properties": self.parameters,
-                "required": [k for k, v in self.parameters.items() if v.get("required", True)],
-            },
+            "input_schema": schema,
         }
 
 
@@ -95,15 +108,12 @@ class ToolRegistry:
 
     @staticmethod
     def _handle_calculate(expression: str) -> dict:
-        """Safe eval using ast — no builtins, no exec.
-        Uses ast.Constant (py3.8+), ast.Num kept for py3.7 compat only.
-        """
+        """Safe eval using ast — no builtins, no exec."""
         try:
             tree = ast.parse(expression, mode="eval")
-            # Whitelist: literals and arithmetic operators only
             allowed = (
                 ast.Expression, ast.BinOp, ast.UnaryOp,
-                ast.Constant,           # py3.8+ (covers numbers, strings, booleans)
+                ast.Constant,
                 ast.Add, ast.Sub, ast.Mult, ast.Div,
                 ast.FloorDiv, ast.Mod, ast.Pow,
                 ast.USub, ast.UAdd,
