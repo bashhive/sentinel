@@ -2,6 +2,9 @@
 
 Public security-alert publisher for the BASH sites.
 
+The canonical goal, boundaries and implementation history are in
+[PROJECT.md](PROJECT.md).
+
 - Telegram: [@hivesecsentinelbot](https://t.me/hivesecsentinelbot)
 - Public panel: `bash.pt` through `rafpt/bash-site`
 - Input: public-only events from the local Data Breach Scanner outbox
