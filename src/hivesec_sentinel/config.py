@@ -13,16 +13,8 @@ def _default_data_dir() -> Path:
     return Path.home() / "Library" / "Application Support" / "HiveSec Sentinel"
 
 
-def _default_butler_report() -> Path:
-    return (
-        Path.home()
-        / "Library"
-        / "Application Support"
-        / "Butler"
-        / "reports"
-        / "radar"
-        / "latest.md"
-    )
+def _default_scanner_outbox() -> Path:
+    return Path.home() / "Library" / "Application Support" / "Data Breach Scanner" / "outbox"
 
 
 def keychain_value(service: str, account: str) -> str:
@@ -52,7 +44,7 @@ def keychain_value(service: str, account: str) -> str:
 @dataclass(frozen=True, slots=True)
 class Settings:
     data_dir: Path = _default_data_dir()
-    butler_report: Path = _default_butler_report()
+    scanner_outbox_root: Path = _default_scanner_outbox()
     log_level: str = "INFO"
     grok_base_url: str = "https://api.x.ai/v1"
     grok_model: str = "grok-4.3"
@@ -63,7 +55,7 @@ class Settings:
     github_repository: str = "rafpt/bash-site"
     github_token: str = ""
     timeout_seconds: float = 20.0
-    max_report_bytes: int = 512 * 1024
+    max_event_bytes: int = 64 * 1024
 
     @property
     def state_path(self) -> Path:
@@ -83,8 +75,8 @@ class Settings:
     def from_env(cls) -> Settings:
         return cls(
             data_dir=Path(os.getenv("HIVESEC_DATA_DIR", str(_default_data_dir()))).expanduser(),
-            butler_report=Path(
-                os.getenv("HIVESEC_BUTLER_REPORT", str(_default_butler_report()))
+            scanner_outbox_root=Path(
+                os.getenv("HIVESEC_SCANNER_OUTBOX_ROOT", str(_default_scanner_outbox()))
             ).expanduser(),
             log_level=os.getenv("HIVESEC_LOG_LEVEL", "INFO").upper(),
             grok_base_url=os.getenv("HIVESEC_GROK_BASE_URL", "https://api.x.ai/v1").rstrip("/"),
@@ -102,5 +94,5 @@ class Settings:
             github_token=os.getenv("HIVESEC_GITHUB_TOKEN")
             or keychain_value("com.hivesec.github", "token"),
             timeout_seconds=float(os.getenv("HIVESEC_TIMEOUT_SECONDS", "20")),
-            max_report_bytes=int(os.getenv("HIVESEC_MAX_REPORT_BYTES", str(512 * 1024))),
+            max_event_bytes=int(os.getenv("HIVESEC_MAX_EVENT_BYTES", str(64 * 1024))),
         )

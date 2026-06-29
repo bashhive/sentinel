@@ -1,43 +1,35 @@
 # Activation
 
-## 1. Configure dedicated credentials
+## 1. Configure isolated credentials
 
-Send `/start` to
-[`@hivesecsentinelbot`](https://t.me/hivesecsentinelbot), then run:
+Add [`@hivesecsentinelbot`](https://t.me/hivesecsentinelbot) to the intended public
+channel/group, then run:
 
 ```bash
 cd "/Users/raf/Code/HiveSec Sentinel"
 ./scripts/configure.sh
 ```
 
-The setup verifies that the BotFather token belongs to `@hivesecsentinelbot`. The existing
-private Telegram chat ID may be reused, but tokens are never copied from Butler.
+The setup verifies the Telegram bot identity. Use a GitHub token limited to the BASH site
+repository and only the permissions required for `repository_dispatch`.
 
-The GitHub fine-grained token must be limited to `rafpt/bash-site` and allow repository
-dispatch/contents updates required by its workflow.
-
-## 2. Validate locally
+## 2. Validate
 
 ```bash
 uv run hivesec-sentinel health
-uv run hivesec-sentinel publish --dry-run
-uv run hivesec-sentinel delivery-test
+uv run hivesec-sentinel consume --dry-run
+make check
+plutil -lint config/launchd/com.hivesec.sentinel.plist
 ```
 
-The dry run performs no network delivery and writes no state.
+Dry-run performs no network delivery and does not move an event.
 
-## 3. Install the schedule
+## 3. Install
 
 ```bash
 ./scripts/install_launch_agent.sh
 launchctl print gui/$UID/com.hivesec.sentinel
 ```
 
-HiveSec runs at 07:45, after Butler's 07:30 radar. Reprocessing the same report is skipped unless
-`--force` is used.
-
-## 4. Activate BASH Pages
-
-Commit and push the reviewed `/Users/raf/Code/BASH_site/public_html` changes. Configure
-`rafpt/bash-site` GitHub Pages to use GitHub Actions while preserving the existing `bash.pt`
-custom domain and HTTPS enforcement.
+The consumer checks the scanner's public outbox every five minutes. Never point
+`HIVESEC_SCANNER_OUTBOX_ROOT` at its `private` directory.

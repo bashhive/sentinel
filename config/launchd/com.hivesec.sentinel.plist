@@ -11,7 +11,7 @@
     <string>__PYTHON__</string>
     <string>-m</string>
     <string>hivesec_sentinel</string>
-    <string>publish</string>
+    <string>consume</string>
   </array>
 
   <key>WorkingDirectory</key>
@@ -23,20 +23,15 @@
     <string>__ROOT__/src</string>
     <key>HIVESEC_DATA_DIR</key>
     <string>__DATA__</string>
-    <key>HIVESEC_BUTLER_REPORT</key>
-    <string>__BUTLER_REPORT__</string>
+    <key>HIVESEC_SCANNER_OUTBOX_ROOT</key>
+    <string>__SCANNER_OUTBOX__</string>
   </dict>
 
-  <key>StartCalendarInterval</key>
-  <dict>
-    <key>Hour</key>
-    <integer>7</integer>
-    <key>Minute</key>
-    <integer>45</integer>
-  </dict>
+  <key>StartInterval</key>
+  <integer>300</integer>
 
   <key>RunAtLoad</key>
-  <false/>
+  <true/>
   <key>KeepAlive</key>
   <false/>
   <key>ProcessType</key>

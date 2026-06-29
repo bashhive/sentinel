@@ -56,26 +56,12 @@ echo "Telegram identity verified: @hivesecsentinelbot"
 if ! /usr/bin/security find-generic-password \
   -s "com.hivesec.telegram" \
   -a "chat-id" >/dev/null 2>&1; then
-  if existing=$(/usr/bin/security find-generic-password \
-    -s "com.butler.telegram" \
-    -a "chat-id" \
-    -w 2>/dev/null); then
-    /usr/bin/security add-generic-password \
-      -U \
-      -a "chat-id" \
-      -s "com.hivesec.telegram" \
-      -l "HiveSec Sentinel Telegram chat ID" \
-      -w "$existing" >/dev/null
-    unset existing
-    echo "Reused the existing private Telegram chat ID."
-  else
-    echo
-    echo "Send /start to @hivesecsentinelbot."
-    store_secret \
-      "com.hivesec.telegram" \
-      "chat-id" \
-      "Numeric Telegram chat ID for HiveSec Sentinel"
-  fi
+  echo
+  echo "Add @hivesecsentinelbot to the intended public channel/group and use its chat ID."
+  store_secret \
+    "com.hivesec.telegram" \
+    "chat-id" \
+    "Public Telegram channel/group ID for HiveSec Sentinel"
 fi
 
 cd "$ROOT"

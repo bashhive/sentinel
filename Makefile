@@ -1,4 +1,4 @@
-.PHONY: install test lint check health publish configure install-agent uninstall-agent
+.PHONY: install test lint check health consume configure install-agent uninstall-agent
 
 install:
 	uv sync --extra dev
@@ -16,8 +16,8 @@ check: lint test
 health:
 	uv run hivesec-sentinel health
 
-publish:
-	uv run hivesec-sentinel publish
+consume:
+	uv run hivesec-sentinel consume
 
 configure:
 	./scripts/configure.sh

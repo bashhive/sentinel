@@ -14,11 +14,11 @@ class PublicAlert:
     severity: str
     source: str
     published_at: str
-    report_digest: str
+    event_digest: str
     degraded: bool
 
     def public_dict(self) -> dict[str, object]:
         result = asdict(self)
-        result.pop("report_digest")
+        result.pop("event_digest")
         result.pop("degraded")
         return result

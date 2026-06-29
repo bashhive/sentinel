@@ -22,27 +22,30 @@ class ServiceTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
-        self.report = self.root / "latest.md"
-        self.report.write_text(
-            "\n".join(
-                [
-                    "# Butler Cyber Radar — 2026-06-29",
-                    "",
-                    "## Must (1)",
-                    "",
-                    "Critical issue",
-                    "",
-                    "## Worth (2)",
-                    "## Monitor (3)",
-                    "## Governance (4)",
-                    "## Continuous Learning (1)",
-                ]
+        self.outbox = self.root / "outbox"
+        self.pending = self.outbox / "public"
+        self.pending.mkdir(parents=True)
+        self.event = self.pending / "breach-0123456789abcdef01234567.json"
+        self.event.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "classification": "public",
+                    "event_id": "breach-0123456789abcdef01234567",
+                    "title": "Acme exposure",
+                    "severity": "CRITICAL",
+                    "confidence": 95,
+                    "domain": "acme.example",
+                    "source": "hibp",
+                    "affected_count": 1_000_000,
+                    "remediation": ["Alterar credenciais afetadas."],
+                }
             ),
             encoding="utf-8",
         )
         self.settings = Settings(
             data_dir=self.root / "data",
-            butler_report=self.report,
+            scanner_outbox_root=self.outbox,
         )
 
     def tearDown(self) -> None:
@@ -55,13 +58,13 @@ class ServiceTests(unittest.TestCase):
             telegram=None,
             github=None,
         )
-        alert = service.build_alert()
+        alert = service.build_alert(self.event)
         self.assertEqual(alert.severity, "critical")
         self.assertTrue(alert.degraded)
         self.assertEqual(alert.source, "HiveSec Sentinel")
-        self.assertNotIn("Critical issue", alert.message)
+        self.assertIn("1 000 000", alert.message)
 
-    def test_publish_delivers_and_deduplicates(self) -> None:
+    def test_consume_delivers_and_moves_event(self) -> None:
         telegram = RecordingDelivery()
         github = RecordingDelivery()
         service = SentinelService(
@@ -70,17 +73,24 @@ class ServiceTests(unittest.TestCase):
             telegram=telegram,  # type: ignore[arg-type]
             github=github,  # type: ignore[arg-type]
         )
-        alert, status = service.publish()
-        self.assertEqual(status, "published")
+        counts = service.consume()
+        self.assertEqual(counts["published"], 1)
         self.assertEqual(len(telegram.alerts), 1)
-        state = json.loads(self.settings.state_path.read_text(encoding="utf-8"))
-        self.assertEqual(state["alert_id"], alert.id)
+        self.assertFalse(self.event.exists())
+        self.assertTrue((service.processed_dir / self.event.name).exists())
 
-        _, repeated = service.publish()
-        self.assertEqual(repeated, "unchanged")
-        self.assertEqual(len(telegram.alerts), 1)
+    def test_failed_delivery_leaves_event_pending(self) -> None:
+        service = SentinelService(
+            settings=self.settings,
+            grok=None,
+            telegram=RecordingDelivery(),  # type: ignore[arg-type]
+            github=RecordingDelivery(False),  # type: ignore[arg-type]
+        )
+        counts = service.consume()
+        self.assertEqual(counts["failed"], 1)
+        self.assertTrue(self.event.exists())
 
-    def test_dry_run_has_no_state_or_delivery(self) -> None:
+    def test_dry_run_has_no_delivery_or_move(self) -> None:
         telegram = RecordingDelivery()
         service = SentinelService(
             settings=self.settings,
@@ -88,10 +98,23 @@ class ServiceTests(unittest.TestCase):
             telegram=telegram,  # type: ignore[arg-type]
             github=RecordingDelivery(),  # type: ignore[arg-type]
         )
-        _, status = service.publish(dry_run=True)
-        self.assertEqual(status, "dry-run")
-        self.assertFalse(self.settings.state_path.exists())
+        counts = service.consume(dry_run=True)
+        self.assertEqual(counts["dry_run"], 1)
+        self.assertTrue(self.event.exists())
         self.assertFalse(telegram.alerts)
+
+    def test_private_identity_is_rejected(self) -> None:
+        event = json.loads(self.event.read_text(encoding="utf-8"))
+        event["victim"] = "owner@example.com"
+        self.event.write_text(json.dumps(event), encoding="utf-8")
+        service = SentinelService(
+            settings=self.settings,
+            grok=None,
+            telegram=None,
+            github=None,
+        )
+        with self.assertRaisesRegex(ValueError, "Private identity"):
+            service.build_alert(self.event)
 
     def test_redacts_credentials_from_public_text(self) -> None:
         marker = "abcdefghijklmnopqrstuvwxyz"

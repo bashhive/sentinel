@@ -1,35 +1,25 @@
 # HiveSec Sentinel architecture
 
-## Responsibility boundary
-
 ```mermaid
 flowchart LR
-    S["Authoritative sources"] --> B["Butler Cyber Radar<br/>07:30 · OMLX"]
-    B --> R["Local latest.md"]
-    R --> H["HiveSec Sentinel<br/>07:45"]
-    H --> G["xAI Grok<br/>bounded synthesis"]
-    G --> A["Sanitized public alert"]
-    A --> T["Telegram<br/>@hivesecsentinelbot"]
-    A --> D["GitHub repository_dispatch"]
-    D --> P["BASH site feed + Pages"]
+    S["Passive authorised sources"] --> D["Data Breach Scanner"]
+    D -->|"public, significant, generic"| O["public outbox"]
+    D -->|"personal impact"| X["private outbox<br/>inaccessible here"]
+    O --> H["HiveSec Sentinel"]
+    H --> G["Grok<br/>bounded synthesis"]
+    H --> T["Telegram<br/>@hivesecsentinelbot"]
+    H --> R["GitHub repository_dispatch"]
+    R --> P["BASH sites"]
 ```
 
-Butler and HiveSec Sentinel are independent projects and schedules. The only integration
-contract is Butler's read-only Markdown report. HiveSec does not import Butler modules, access
-its SQLite database, or hold credentials in the Butler Keychain namespace.
+## Security boundary
 
-## Processing
-
-1. Read at most 512 KiB from Butler's stable `latest.md`.
-2. Hash the complete report for idempotency.
-3. Extract only the report date and `Must` count deterministically.
-4. Send a bounded, explicitly untrusted copy to Grok.
-5. Redact common credential shapes and bound the public message.
-6. Deliver the same versioned alert to Telegram and GitHub.
-7. Record the digest only after both deliveries succeed.
-
-If Grok fails, HiveSec publishes a deterministic count-only summary. Raw report text, local
-paths, source excerpts, model prompts and secrets never enter the public alert contract.
+- Only versioned JSON events marked `classification=public` are accepted.
+- Filenames and IDs must match `breach-<24 hex>`, files must be regular and at most 64 KiB.
+- Any event containing a `victim` field is rejected before Grok or delivery.
+- Grok receives the already-public event inside explicit untrusted-content delimiters.
+- Telegram and GitHub must both succeed before the event moves to `processed/public`.
+- Grok failure uses a deterministic summary; delivery failure leaves the event pending.
 
 ## Public contract
 
@@ -37,7 +27,7 @@ paths, source excerpts, model prompts and secrets never enter the public alert c
 {
   "schema_version": 1,
   "id": "hivesec-<24 hex characters>",
-  "title": "HiveSec Sentinel — 2026-06-29",
+  "title": "HiveSec Sentinel — incident title",
   "message": "Bounded public alert text",
   "severity": "critical",
   "source": "HiveSec Sentinel",
@@ -45,13 +35,4 @@ paths, source excerpts, model prompts and secrets never enter the public alert c
 }
 ```
 
-The BASH workflow validates identifiers, types, lengths, severity and timezone before storing
-the latest 20 alerts. The browser renders fields with `textContent`, never HTML.
-
-## Operations
-
-- Butler LaunchAgent: `com.butler.cyber-radar`, 07:30.
-- HiveSec LaunchAgent: `com.hivesec.sentinel`, 07:45.
-- HiveSec state: `~/Library/Application Support/HiveSec Sentinel/state.json`.
-- HiveSec logs: `~/Library/Logs/HiveSec Sentinel/`.
-- No resident agent, polling loop, webhook or conversational memory.
+The LaunchAgent polls every five minutes and keeps no resident network listener.

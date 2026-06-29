@@ -1,4 +1,4 @@
-"""Read a Butler report, enrich it and publish a bounded public alert."""
+"""Consume public scanner events and publish bounded public alerts."""
 
 from __future__ import annotations
 
@@ -13,8 +13,7 @@ from hivesec_sentinel.clients import ClientError, GitHubDispatchClient, GrokClie
 from hivesec_sentinel.config import Settings
 from hivesec_sentinel.models import PublicAlert
 
-REPORT_DATE = re.compile(r"^# .+?(\d{4}-\d{2}-\d{2})", re.MULTILINE)
-MUST_COUNT = re.compile(r"^## Must \((\d+)\)", re.MULTILINE)
+EVENT_ID = re.compile(r"^breach-([a-f0-9]{24})$")
 SECRET_PATTERNS = (
     re.compile(r"\b(?:xai-|sk-|gsk_)[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\b[0-9]{8,12}:[A-Za-z0-9_-]{30,}\b"),
@@ -29,28 +28,25 @@ def sanitize_public_text(text: str, *, maximum: int = 3500) -> str:
     return cleaned.strip()[:maximum]
 
 
-def deterministic_summary(report: str, must_count: int) -> str:
-    sections = {
-        name: int(count)
-        for name, count in re.findall(
-            r"^## (Must|Worth|Monitor|Governance|Continuous Learning) \((\d+)\)",
-            report,
-            re.MULTILINE,
-        )
-    }
-    if must_count:
-        lead = f"• Foram identificados {must_count} item(ns) de prioridade MUST."
-    else:
-        lead = "• Não foram identificados itens de prioridade MUST nesta edição."
-    return "\n".join(
-        [
-            lead,
-            f"• Worth: {sections.get('Worth', 0)}; Monitor: {sections.get('Monitor', 0)}.",
-            f"• Governance: {sections.get('Governance', 0)}; formação contínua: "
-            f"{sections.get('Continuous Learning', 0)}.",
-            "• Consultar o Cyber Radar e as fontes primárias antes de qualquer decisão.",
-        ]
+def deterministic_summary(event: dict[str, object]) -> str:
+    try:
+        affected = int(str(event.get("affected_count", 0) or 0))
+    except ValueError:
+        affected = 0
+    domain = sanitize_public_text(str(event.get("domain", "")), maximum=200)
+    source = sanitize_public_text(str(event.get("source", "fonte pública")), maximum=100)
+    remediation = event.get("remediation", [])
+    actions = (
+        [sanitize_public_text(str(item), maximum=300) for item in remediation[:3]]
+        if isinstance(remediation, list)
+        else []
     )
+    lines = [
+        f"• Exposição reportada por {source}" + (f" associada a {domain}." if domain else "."),
+        f"• Contas/registos potencialmente afetados: {affected:,}.".replace(",", " "),
+    ]
+    lines.extend(f"• {action}" for action in actions if action)
+    return "\n".join(lines)
 
 
 class SentinelService:
@@ -67,91 +63,89 @@ class SentinelService:
         self.telegram = telegram
         self.github = github
 
-    def build_alert(self, report_path: Path | None = None) -> PublicAlert:
-        path = report_path or self.settings.butler_report
-        if not path.is_file():
-            raise FileNotFoundError(path)
-        if path.stat().st_size > self.settings.max_report_bytes:
-            raise ValueError("Butler report exceeds the configured size limit")
-        report = path.read_text(encoding="utf-8")
-        digest = hashlib.sha256(report.encode()).hexdigest()
-        date_match = REPORT_DATE.search(report)
-        report_date = date_match.group(1) if date_match else path.stem
-        must_match = MUST_COUNT.search(report)
-        must_count = int(must_match.group(1)) if must_match else 0
+    @property
+    def pending_dir(self) -> Path:
+        return self.settings.scanner_outbox_root / "public"
+
+    @property
+    def processed_dir(self) -> Path:
+        return self.settings.scanner_outbox_root / "processed" / "public"
+
+    def load_event(self, path: Path) -> dict[str, object]:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("Public event must be a regular file")
+        if path.parent.resolve() != self.pending_dir.resolve():
+            raise ValueError("Public event is outside the public outbox")
+        if path.stat().st_size > self.settings.max_event_bytes:
+            raise ValueError("Public event exceeds the configured size limit")
+        event = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(event, dict):
+            raise ValueError("Public event must be a JSON object")
+        if event.get("schema_version") != 1 or event.get("classification") != "public":
+            raise ValueError("Invalid public event contract")
+        event_id = str(event.get("event_id", ""))
+        if EVENT_ID.fullmatch(event_id) is None or path.name != f"{event_id}.json":
+            raise ValueError("Invalid public event identifier")
+        if "victim" in event:
+            raise ValueError("Private identity found in public event")
+        return event
+
+    def build_alert(self, path: Path) -> PublicAlert:
+        event = self.load_event(path)
+        digest = hashlib.sha256(
+            json.dumps(event, ensure_ascii=False, sort_keys=True).encode()
+        ).hexdigest()
         degraded = False
         if self.grok is None:
-            summary = deterministic_summary(report, must_count)
+            summary = deterministic_summary(event)
             degraded = True
         else:
             try:
-                summary = self.grok.summarize(
-                    report,
-                    report_date=report_date,
-                    must_count=must_count,
-                )
+                summary = self.grok.summarize_event(event)
             except ClientError:
-                summary = deterministic_summary(report, must_count)
+                summary = deterministic_summary(event)
                 degraded = True
-        published_at = datetime.now(UTC).replace(microsecond=0).isoformat()
+        event_id = str(event["event_id"])
+        event_id_match = EVENT_ID.fullmatch(event_id)
+        if event_id_match is None:
+            raise ValueError("Invalid public event identifier")
+        severity = str(event.get("severity", "HIGH")).upper()
+        title = sanitize_public_text(str(event.get("title", "Alerta")), maximum=180)
         return PublicAlert(
             schema_version=1,
-            id=f"hivesec-{digest[:24]}",
-            title=f"HiveSec Sentinel — {report_date}",
+            id=f"hivesec-{event_id_match.group(1)}",
+            title=f"HiveSec Sentinel — {title}",
             message=sanitize_public_text(summary),
-            severity="critical" if must_count else "info",
+            severity="critical" if severity == "CRITICAL" else "warning",
             source="HiveSec Sentinel",
-            published_at=published_at,
-            report_digest=digest,
+            published_at=datetime.now(UTC).replace(microsecond=0).isoformat(),
+            event_digest=digest,
             degraded=degraded,
         )
 
-    def publish(
-        self,
-        *,
-        report_path: Path | None = None,
-        dry_run: bool = False,
-        force: bool = False,
-    ) -> tuple[PublicAlert, str]:
-        alert = self.build_alert(report_path)
-        if not force and self._published_digest() == alert.report_digest:
-            return alert, "unchanged"
-        if dry_run:
-            return alert, "dry-run"
-        if self.telegram is None or self.github is None:
-            raise RuntimeError("Telegram and GitHub delivery must both be configured")
-        outcomes = {
-            "telegram": self.telegram.send(alert),
-            "github": self.github.send(alert),
-        }
-        if not all(outcomes.values()):
-            failed = ", ".join(name for name, ok in outcomes.items() if not ok)
-            raise RuntimeError(f"Alert delivery failed: {failed}")
-        self._save_state(alert)
-        return alert, "published"
+    def consume(self, *, dry_run: bool = False, limit: int = 20) -> dict[str, int]:
+        counts = {"pending": 0, "published": 0, "failed": 0, "dry_run": 0}
+        if not self.pending_dir.exists():
+            return counts
+        paths = sorted(self.pending_dir.glob("breach-*.json"))[: max(0, limit)]
+        counts["pending"] = len(paths)
+        for path in paths:
+            try:
+                alert = self.build_alert(path)
+                if dry_run:
+                    counts["dry_run"] += 1
+                    continue
+                if self.telegram is None or self.github is None:
+                    raise RuntimeError("Telegram and GitHub delivery must both be configured")
+                if not self.telegram.send(alert) or not self.github.send(alert):
+                    raise RuntimeError("Public alert delivery failed")
+                self._mark_processed(path)
+                counts["published"] += 1
+            except (ClientError, ValueError, RuntimeError, OSError, json.JSONDecodeError):
+                counts["failed"] += 1
+        return counts
 
-    def _published_digest(self) -> str:
-        if not self.settings.state_path.is_file():
-            return ""
-        try:
-            state = json.loads(self.settings.state_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return ""
-        return str(state.get("report_digest", ""))
-
-    def _save_state(self, alert: PublicAlert) -> None:
-        self.settings.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        temporary = self.settings.state_path.with_suffix(".json.tmp")
-        temporary.write_text(
-            json.dumps(
-                {
-                    "report_digest": alert.report_digest,
-                    "alert_id": alert.id,
-                    "published_at": alert.published_at,
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        os.replace(temporary, self.settings.state_path)
+    def _mark_processed(self, path: Path) -> None:
+        self.processed_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        destination = self.processed_dir / path.name
+        os.replace(path, destination)
