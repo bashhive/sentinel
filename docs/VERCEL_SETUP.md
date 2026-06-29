@@ -32,7 +32,7 @@ URL será tipo: https://aspasia-bot.vercel.app
 ## 5. Update Telegram Webhook
 
 ```bash
-curl -X POST https://api.telegram.org/bot<REDACTED_TELEGRAM_TOKEN>/setWebhook \
+curl -X POST https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook \
   -H 'Content-Type: application/json' \
   -d '{"url": "https://aspasia-bot.vercel.app/api/telegram"}'
 ```
