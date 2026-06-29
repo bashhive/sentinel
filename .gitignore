@@ -1,42 +1,13 @@
-# Python
+.DS_Store
+.env
+.venv/
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
 *.egg-info/
 dist/
 build/
-.eggs/
-venv/
-.venv/
-
-# Env
-.env
-*.env
-
-# Logs
-logs/
+data/
 *.log
-
-# Database
-*.db
-*.sqlite
-
-# macOS
-.DS_Store
-
-# Editors
-.vscode/
-.idea/
-*.swp
-
-# Vercel
-.vercel/
-
-# Archive (kept in repo for reference, nothing sensitive)
-# _archive/ — intentionally tracked
-
-# node (archive only, not active)
-node_modules/
-_archive/aspasia_original/
-_archive/node_modules/
