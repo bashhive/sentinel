@@ -19,6 +19,7 @@ flowchart LR
 - Any event containing a `victim` field is rejected before Grok or delivery.
 - Grok receives the already-public event inside explicit untrusted-content delimiters.
 - Telegram and GitHub must both succeed before the event moves to `processed/public`.
+- Per-event delivery state prevents a successful channel being repeated after the other fails.
 - Grok failure uses a deterministic summary; delivery failure leaves the event pending.
 
 ## Public contract

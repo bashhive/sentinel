@@ -137,9 +137,19 @@ class SentinelService:
                     continue
                 if self.telegram is None or self.github is None:
                     raise RuntimeError("Telegram and GitHub delivery must both be configured")
-                if not self.telegram.send(alert) or not self.github.send(alert):
-                    raise RuntimeError("Public alert delivery failed")
+                delivery = self._delivery_state(alert)
+                if not delivery.get("telegram"):
+                    if not self.telegram.send(alert):
+                        raise RuntimeError("Telegram delivery failed")
+                    delivery["telegram"] = True
+                    self._save_delivery_state(alert, delivery)
+                if not delivery.get("github"):
+                    if not self.github.send(alert):
+                        raise RuntimeError("GitHub delivery failed")
+                    delivery["github"] = True
+                    self._save_delivery_state(alert, delivery)
                 self._mark_processed(path)
+                self._delivery_state_path(alert).unlink(missing_ok=True)
                 counts["published"] += 1
             except (ClientError, ValueError, RuntimeError, OSError, json.JSONDecodeError):
                 counts["failed"] += 1
@@ -149,3 +159,39 @@ class SentinelService:
         self.processed_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
         destination = self.processed_dir / path.name
         os.replace(path, destination)
+
+    def _delivery_state_path(self, alert: PublicAlert) -> Path:
+        return self.settings.data_dir / "delivery" / f"{alert.id}.json"
+
+    def _delivery_state(self, alert: PublicAlert) -> dict[str, bool]:
+        path = self._delivery_state_path(alert)
+        if not path.is_file():
+            return {}
+        try:
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(state, dict) or state.get("event_digest") != alert.event_digest:
+            return {}
+        return {
+            "telegram": state.get("telegram") is True,
+            "github": state.get("github") is True,
+        }
+
+    def _save_delivery_state(self, alert: PublicAlert, delivery: dict[str, bool]) -> None:
+        path = self._delivery_state_path(alert)
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        temporary = path.with_suffix(".json.tmp")
+        temporary.write_text(
+            json.dumps(
+                {
+                    "event_digest": alert.event_digest,
+                    "telegram": delivery.get("telegram") is True,
+                    "github": delivery.get("github") is True,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)

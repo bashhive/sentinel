@@ -80,15 +80,24 @@ class ServiceTests(unittest.TestCase):
         self.assertTrue((service.processed_dir / self.event.name).exists())
 
     def test_failed_delivery_leaves_event_pending(self) -> None:
+        telegram = RecordingDelivery()
+        github = RecordingDelivery(False)
         service = SentinelService(
             settings=self.settings,
             grok=None,
-            telegram=RecordingDelivery(),  # type: ignore[arg-type]
-            github=RecordingDelivery(False),  # type: ignore[arg-type]
+            telegram=telegram,  # type: ignore[arg-type]
+            github=github,  # type: ignore[arg-type]
         )
         counts = service.consume()
         self.assertEqual(counts["failed"], 1)
         self.assertTrue(self.event.exists())
+        self.assertEqual(len(telegram.alerts), 1)
+
+        github.succeeds = True
+        counts = service.consume()
+        self.assertEqual(counts["published"], 1)
+        self.assertEqual(len(telegram.alerts), 1)
+        self.assertEqual(len(github.alerts), 2)
 
     def test_dry_run_has_no_delivery_or_move(self) -> None:
         telegram = RecordingDelivery()
