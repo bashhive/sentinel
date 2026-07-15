@@ -1,35 +1,29 @@
 # Activation
 
-## 1. Configure isolated credentials
+HiveSec Sentinel is activated from Butler, not from this repository.
 
-Add [`@hivesecsentinelbot`](https://t.me/hivesecsentinelbot) to the intended public
-channel/group, then run:
+## Configure
 
 ```bash
-cd "/Users/raf/Code/HiveSec Sentinel"
-./scripts/configure.sh
+cd "/Users/raf/Code/Butler"
+./scripts/configure_hivesec_sentinel.sh
 ```
 
-The setup verifies the Telegram bot identity. Use a GitHub token limited to the BASH site
-repository and only the permissions required for `repository_dispatch`.
+The script stores dedicated credentials in:
 
-## 2. Validate
+- `com.butler.hivesec.telegram`
+- `com.butler.hivesec.github`
+
+## Validate
 
 ```bash
-uv run hivesec-sentinel health
-uv run hivesec-sentinel consume --dry-run
+cd "/Users/raf/Code/Butler"
+uv run butler health
+uv run butler radar run --dry-run
 make check
-plutil -lint config/launchd/com.hivesec.sentinel.plist
 ```
 
-Dry-run performs no network delivery and does not move an event.
+## Do not install
 
-## 3. Install
-
-```bash
-./scripts/install_launch_agent.sh
-launchctl print gui/$UID/com.hivesec.sentinel
-```
-
-The consumer checks the scanner's public outbox every five minutes. Never point
-`HIVESEC_SCANNER_OUTBOX_ROOT` at its `private` directory.
+Do not install or restore `com.hivesec.sentinel`. HiveSec Sentinel has no local
+LaunchAgent and no resident receiver.

@@ -1,32 +1,19 @@
 # HiveSec Sentinel
 
-Public security-alert publisher for the BASH sites.
+HiveSec Sentinel is the public security-alert identity for BashHive.
 
-The canonical goal, boundaries and implementation history are in
-[PROJECT.md](PROJECT.md).
+This repository is documentation-only. It must not run a local agent, LaunchAgent, bot
+receiver, webhook server or scheduled process.
 
+- Brand: BashHive
+- Bot: HiveSec Sentinel
 - Telegram: [@hivesecsentinelbot](https://t.me/hivesecsentinelbot)
-- Public panel: `bash.pt` through `rafpt/bash-site`
-- Input: public-only events from the local Data Breach Scanner outbox
-- Enrichment: xAI Grok, invoked only after the scanner classifies an event as public
-- Runtime: macOS LaunchAgent polling every five minutes
+- Tagline: “AI security assistant for alerts, guidance and security topics.”
+- Runtime: `/Users/raf/Code/Butler`
+- Public site receiver: `/Users/raf/Code/BASH_site/public_html`
 
-HiveSec owns Grok, public-site and public Telegram credentials. It cannot read the scanner's
-private outbox and has no Butler or Aspasia credentials.
+Butler publishes public Cyber Radar MUST alerts through local OMLX, Telegram and GitHub
+`repository_dispatch`. The BASH site renders the static public feed through GitHub Pages.
 
-## Quick start
-
-```bash
-cd "/Users/raf/Code/HiveSec Sentinel"
-uv sync --extra dev
-uv run hivesec-sentinel health
-uv run hivesec-sentinel consume --dry-run
-./scripts/configure.sh
-./scripts/install_launch_agent.sh
-```
-
-Credentials remain in the dedicated `com.hivesec.*` macOS Keychain services. No token is
-stored in this repository, event files, logs or launchd plists.
-
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+See [PROJECT.md](PROJECT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 [docs/ACTIVATION.md](docs/ACTIVATION.md).

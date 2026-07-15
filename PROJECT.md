@@ -2,67 +2,35 @@
 
 ## Goal
 
-Publish high-confidence, globally relevant leak and dark-web exposure
-intelligence to public BASH channels without receiving personal victim data.
+Provide the public BashHive security-alert identity without running a separate local
+agent. Butler is the only runtime that prepares and publishes HiveSec Sentinel alerts.
 
 ## Responsibilities
 
-- Consume only the Data Breach Scanner public outbox.
-- Convert a validated public event into a bounded PT-PT executive alert.
-- Use Grok for editorial synthesis with deterministic fallback.
-- Deliver the same public contract to `@hivesecsentinelbot` and the BASH site
-  through GitHub `repository_dispatch`.
-- Preserve retry state until both channels confirm delivery.
+- Define the public identity, Telegram handle and alert contract.
+- Document the system boundary between Butler, the Telegram bot and BASH GitHub Pages.
+- Keep legacy Aspasia/Bot code decommissioned.
 
-## Boundaries
+## Non-responsibilities
 
-- Telegram identity: `@hivesecsentinelbot`.
-- The project cannot read the scanner private outbox.
-- Any event containing `victim` is rejected before Grok or delivery.
-- It has no Butler, Aspasia or scanner-source credentials.
-- Grok sees only already-public, bounded event JSON marked as untrusted input.
+- No LaunchAgent.
+- No Python package or CLI runtime.
+- No Telegram webhook or resident receiver.
+- No scanner outbox consumer.
+- No Butler, Aspasia, scanner-source or trading credentials.
 
-## Implemented changes — 2026-06-29
+## Runtime ownership
 
-- Extracted HiveSec/Grok/public publishing from Butler into this standalone
-  project.
-- Replaced Butler Markdown report ingestion with the scanner public-event
-  contract.
-- Added schema, ID, file type, path, size and private-field validation.
-- Added secret-pattern redaction and deterministic degraded summaries.
-- Added Telegram and GitHub delivery clients with dedicated Keychain namespaces.
-- Added per-channel durable retry progress and move-after-dual-success semantics.
-- Replaced the 07:45 report schedule with a five-minute public-outbox poll.
-- Added unit tests, activation documentation and BASH receiver validation.
-
-## Operations
-
-```bash
-make check
-uv run hivesec-sentinel health
-uv run hivesec-sentinel consume --dry-run
-./scripts/configure.sh
-./scripts/install_launch_agent.sh
-launchctl print gui/$UID/com.hivesec.sentinel
-```
-
-Do not install the LaunchAgent until the dedicated Telegram, xAI and GitHub
-credentials pass `health`.
+- Butler owns execution and Keychain access under `com.butler.hivesec.*`.
+- BASH site owns static rendering and `repository_dispatch` ingestion.
+- Telegram owns the public `@hivesecsentinelbot` identity.
 
 ## Success criteria
 
-- No personal identity can cross the public boundary.
-- Telegram and site receive identical versioned alerts.
-- A temporary Grok failure still permits deterministic publication.
-- A channel failure leaves the event pending and does not repeat a channel that
-  already succeeded.
-- The process exposes no inbound listener or remote Butler interface.
-
-## Next goals
-
-1. Configure and verify the three dedicated credentials.
-2. Publish the current public outbox and confirm site rendering.
-3. Add source-quality and publication-latency dashboards after stable operation.
+- The repository contains no active runtime code.
+- No `com.hivesec.sentinel` LaunchAgent is installed or required.
+- Public alerts are generated only from Butler Cyber Radar public-source MUST items.
+- The public site receives only the versioned `PublicAlert` contract.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 [docs/ACTIVATION.md](docs/ACTIVATION.md).
