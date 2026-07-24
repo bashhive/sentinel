@@ -27,6 +27,7 @@ def test_kev_alerts_include_action_and_source() -> None:
     alerts = kev_alerts(catalog(), since=date(2026, 7, 20), seen_ids=set())
     assert len(alerts) == 1
     assert alerts[0]["id"] == "hivesec-kev-cve-2026-1000"
+    assert alerts[0]["schema_version"] == 1
     assert "Apply the vendor update." in alerts[0]["message"]
     assert KEV_URL in alerts[0]["message"]
 

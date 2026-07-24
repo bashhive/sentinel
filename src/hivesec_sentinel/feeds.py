@@ -61,11 +61,13 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def kev_alerts(catalog: dict[str, Any], *, since: date, seen_ids: set[str]) -> list[dict[str, str]]:
+def kev_alerts(
+    catalog: dict[str, Any], *, since: date, seen_ids: set[str]
+) -> list[dict[str, object]]:
     vulnerabilities = catalog.get("vulnerabilities")
     if not isinstance(vulnerabilities, list):
         raise TypeError("KEV catalog has no vulnerabilities list")
-    alerts: list[dict[str, str]] = []
+    alerts: list[dict[str, object]] = []
     for item in vulnerabilities:
         if not isinstance(item, dict):
             continue
@@ -91,7 +93,7 @@ def kev_alerts(catalog: dict[str, Any], *, since: date, seen_ids: set[str]) -> l
         )
         alerts.append(
             {
-                "schema_version": "1",
+                "schema_version": 1,
                 "id": alert_id,
                 "title": f"CISA KEV: {name}",
                 "message": message,
@@ -105,7 +107,7 @@ def kev_alerts(catalog: dict[str, Any], *, since: date, seen_ids: set[str]) -> l
 
 def refresh_kev(
     *, state_path: Path, lookback_days: int = 7, opener: Callable[..., Any] = urlopen
-) -> tuple[list[dict[str, str]], SourceHealth]:
+) -> tuple[list[dict[str, object]], SourceHealth]:
     now = utc_now()
     state = load_state(state_path)
     seen = {item for item in state.get("seen_ids", []) if isinstance(item, str)}
@@ -126,10 +128,12 @@ def refresh_kev(
     return alerts, health
 
 
-def record_published(state_path: Path, alerts: list[dict[str, str]]) -> None:
+def record_published(state_path: Path, alerts: list[dict[str, object]]) -> None:
     """Record alert delivery only after all public channels accepted it."""
 
     state = load_state(state_path)
     seen = {item for item in state.get("seen_ids", []) if isinstance(item, str)}
-    state["seen_ids"] = sorted(seen | {alert["id"] for alert in alerts})[-1000:]
+    state["seen_ids"] = sorted(
+        seen | {alert_id for alert in alerts if isinstance(alert_id := alert.get("id"), str)}
+    )[-1000:]
     save_state(state_path, state)
