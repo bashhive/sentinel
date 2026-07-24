@@ -2,34 +2,30 @@
 
 ## Goal
 
-Provide the public BashHive security-alert identity without running a separate local
-agent. Butler is the only runtime that prepares and publishes HiveSec Sentinel alerts.
+Provide the public BashHive cybersecurity-alert identity and the code used by the BASH sites.
 
 ## Responsibilities
 
-- Define the public identity, Telegram handle and alert contract.
-- Document the system boundary between Butler, the Telegram bot and BASH GitHub Pages.
-- Keep legacy Aspasia/Bot code decommissioned.
+- Publish general, verified cybersecurity alerts to the BASH sites and Telegram handle.
+- Validate the versioned public-alert contract and reject private identities.
+- Keep public delivery credentials isolated from Butler and the scanner.
 
 ## Non-responsibilities
 
-- No LaunchAgent.
-- No Python package or CLI runtime.
-- No Telegram webhook or resident receiver.
-- No scanner outbox consumer.
+- No personal-assistant workflows, calendar, email, LinkedIn or YouTube data.
+- No Data Breach Scanner outbox consumer or victim identity.
 - No Butler, Aspasia, scanner-source or trading credentials.
 
 ## Runtime ownership
 
-- Butler owns execution and Keychain access under `com.butler.hivesec.*`.
+- Sentinel owns public delivery under `com.hivesec.sentinel.*`.
 - BASH site owns static rendering and `repository_dispatch` ingestion.
 - Telegram owns the public `@hivesecsentinelbot` identity.
 
 ## Success criteria
 
-- The repository contains no active runtime code.
-- No `com.hivesec.sentinel` LaunchAgent is installed or required.
-- Public alerts are generated only from Butler Cyber Radar public-source MUST items.
+- The repository contains the public publisher and contract tests.
+- Public alerts are general cybersecurity facts, never personal scanner events.
 - The public site receives only the versioned `PublicAlert` contract.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and

@@ -2,9 +2,7 @@
 
 ```mermaid
 flowchart LR
-    S["Public security sources"] --> B["Butler Cyber Radar"]
-    B -->|"MUST item only"| G["OMLX public synthesis"]
-    G --> A["PublicAlert contract"]
+    S["Verified public cybersecurity sources"] --> A["PublicAlert contract"]
     A --> T["Telegram @hivesecsentinelbot"]
     A --> R["GitHub repository_dispatch"]
     R --> P["BASH GitHub Pages feed"]
@@ -12,11 +10,9 @@ flowchart LR
 
 ## Boundary
 
-- Butler is the only executable runtime.
-- This repository is documentation-only.
-- Public alerts are derived from public-source Cyber Radar MUST items, not from private
-  Data Breach Scanner events.
-- OMLX receives bounded public facts inside untrusted-content delimiters.
+- Sentinel is the only public-alert publisher.
+- Butler is a private assistant and never supplies personal context or credentials here.
+- Data Breach Scanner events, victim identities and private outboxes are rejected.
 - The BASH site accepts only alerts with `source=HiveSec Sentinel`.
 
 ## Public contract
@@ -29,6 +25,6 @@ flowchart LR
   "message": "Bounded public alert text",
   "severity": "critical",
   "source": "HiveSec Sentinel",
-  "published_at": "2026-07-15T10:00:00+00:00"
+  "published_at": "2026-07-23T10:00:00+00:00"
 }
 ```

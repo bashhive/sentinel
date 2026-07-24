@@ -1,29 +1,40 @@
 # Activation
 
-HiveSec Sentinel is activated from Butler, not from this repository.
+HiveSec Sentinel is activated from this repository, independently from Butler.
 
 ## Configure
 
 ```bash
-cd "/Users/raf/Code/Butler"
-./scripts/configure_hivesec_sentinel.sh
+cd "/Users/raf/Code/sentinel"
+uv sync --extra dev
 ```
 
-The script stores dedicated credentials in:
+The approved secret store supplies dedicated credentials for:
 
-- `com.butler.hivesec.telegram`
-- `com.butler.hivesec.github`
+- `HIVESEC_TELEGRAM_BOT_TOKEN`
+- `HIVESEC_TELEGRAM_CHAT_ID`
+- `HIVESEC_GITHUB_TOKEN`
 
 ## Validate
 
 ```bash
-cd "/Users/raf/Code/Butler"
-uv run butler health
-uv run butler radar run --dry-run
-make check
+cd "/Users/raf/Code/sentinel"
+uv run pytest
+uv run hivesec-sentinel publish alert.json --dry-run
 ```
 
 ## Do not install
 
-Do not install or restore `com.hivesec.sentinel`. HiveSec Sentinel has no local
-LaunchAgent and no resident receiver.
+Do not configure Butler or Data Breach Scanner credentials here. Deploy only after the public
+site has supplied `HIVESEC_TELEGRAM_BOT_TOKEN`, `HIVESEC_TELEGRAM_CHAT_ID` and
+`HIVESEC_GITHUB_TOKEN` through its approved secret store.
+
+## Periodic source validation
+
+`scripts/refresh_public_feed.sh` checks the official CISA Known Exploited Vulnerabilities
+catalog every six hours. It keeps its delivery state under `~/Library/Application Support/HiveSec Sentinel/`
+and retrieves credentials from Keychain at runtime; no secret is stored in the script or plist.
+
+Install `config/launchd/com.hivesec.sentinel-feed-refresh.plist` only after all three
+`HIVESEC_*` Keychain entries have been confirmed. The job publishes a new alert only after both
+Telegram and the public-site dispatch succeed, then records it as delivered to prevent duplicates.

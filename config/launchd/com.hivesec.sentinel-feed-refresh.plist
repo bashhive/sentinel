@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hivesec.sentinel-feed-refresh</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/raf/Code/sentinel/scripts/refresh_public_feed.sh</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>21600</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/raf/Library/Logs/HiveSecSentinel/feed-refresh.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/raf/Library/Logs/HiveSecSentinel/feed-refresh-error.log</string>
+  <key>ProcessType</key>
+  <string>Background</string>
+</dict>
+</plist>
