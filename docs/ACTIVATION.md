@@ -35,6 +35,8 @@ site has supplied `HIVESEC_TELEGRAM_BOT_TOKEN`, `HIVESEC_TELEGRAM_CHAT_ID` and
 catalog every six hours. It keeps its delivery state under `~/Library/Application Support/HiveSec Sentinel/`
 and retrieves credentials from Keychain at runtime; no secret is stored in the script or plist.
 
-Install `config/launchd/com.hivesec.sentinel-feed-refresh.plist` only after all three
-`HIVESEC_*` Keychain entries have been confirmed. The job publishes a new alert only after both
-Telegram and the public-site dispatch succeed, then records it as delivered to prevent duplicates.
+The refresh script reuses the existing legacy Keychain entries for the Telegram bot token and
+GitHub token. Install `config/launchd/com.hivesec.sentinel-feed-refresh.plist` only after the
+`HIVESEC_TELEGRAM_CHAT_ID` Keychain entry has been confirmed. The job publishes a new alert only
+after both Telegram and the public-site dispatch succeed, then records it as delivered to prevent
+duplicates.
