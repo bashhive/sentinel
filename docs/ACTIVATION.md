@@ -15,6 +15,12 @@ The approved secret store supplies dedicated credentials for:
 - `HIVESEC_TELEGRAM_CHAT_ID`
 - `HIVESEC_GITHUB_TOKEN`
 
+Every live or dry-run invocation also requires:
+
+- `SENTINEL_EXECUTION_PROFILE=public_brand`
+- `SENTINEL_POLICY_VERSION=execution-profiles-v1`
+- `SENTINEL_ATTRIBUTION_APPROVAL_REF=<approved change or policy reference>`
+
 ## Validate
 
 ```bash
@@ -35,8 +41,7 @@ site has supplied `HIVESEC_TELEGRAM_BOT_TOKEN`, `HIVESEC_TELEGRAM_CHAT_ID` and
 catalog every six hours. It keeps its delivery state under `~/Library/Application Support/HiveSec Sentinel/`
 and retrieves credentials from Keychain at runtime; no secret is stored in the script or plist.
 
-The refresh script reuses the existing legacy Keychain entries for the Telegram bot token and
-GitHub token. Install `config/launchd/com.hivesec.sentinel-feed-refresh.plist` only after the
-`HIVESEC_TELEGRAM_CHAT_ID` Keychain entry has been confirmed. The job publishes a new alert only
+The refresh script uses only `com.hivesec.sentinel.*` Keychain entries. Run the
+one-time namespace migration script before installing the LaunchAgent. The job publishes a new alert only
 after both Telegram and the public-site dispatch succeed, then records it as delivered to prevent
 duplicates.

@@ -12,6 +12,15 @@
   <integer>21600</integer>
   <key>RunAtLoad</key>
   <true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SENTINEL_EXECUTION_PROFILE</key>
+    <string>public_brand</string>
+    <key>SENTINEL_POLICY_VERSION</key>
+    <string>execution-profiles-v1</string>
+    <key>SENTINEL_ATTRIBUTION_APPROVAL_REF</key>
+    <string>PUBLIC-PUBLISH-2026-001</string>
+  </dict>
   <key>StandardOutPath</key>
   <string>/Users/raf/Library/Logs/HiveSecSentinel/feed-refresh.log</string>
   <key>StandardErrorPath</key>

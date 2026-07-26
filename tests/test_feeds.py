@@ -53,7 +53,11 @@ def test_refresh_persists_source_health_and_seen_ids(tmp_path: Path) -> None:
             return None
 
     state_path = tmp_path / "state.json"
-    alerts, health = refresh_kev(state_path=state_path, opener=lambda *_args, **_kwargs: Response())
+    alerts, health = refresh_kev(
+        state_path=state_path,
+        user_agent="HiveSec-Sentinel-Test/1.0",
+        opener=lambda *_args, **_kwargs: Response(),
+    )
     state = load_state(state_path)
     assert health.status == "ok"
     assert len(alerts) == 1

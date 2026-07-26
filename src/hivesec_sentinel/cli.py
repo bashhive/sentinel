@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 from .feeds import record_published, refresh_kev
+from .profile import resolve_public_brand
 from .publisher import Publisher, alert_from_input
 
 
@@ -22,10 +23,18 @@ def main(argv: list[str] | None = None) -> int:
     refresh.add_argument("--lookback-days", type=int, default=7)
     refresh.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+    try:
+        public_context = resolve_public_brand(os.environ)
+    except ValueError as error:
+        parser.error(str(error))
     if args.command == "refresh-kev":
         if args.lookback_days < 1 or args.lookback_days > 30:
             parser.error("--lookback-days must be between 1 and 30")
-        alerts, health = refresh_kev(state_path=args.state, lookback_days=args.lookback_days)
+        alerts, health = refresh_kev(
+            state_path=args.state,
+            user_agent=public_context.user_agent,
+            lookback_days=args.lookback_days,
+        )
         output = {"source_health": health.payload(), "alerts": alerts}
         if args.dry_run:
             print(json.dumps(output, ensure_ascii=False, indent=2))
@@ -37,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
             telegram_chat_id=os.environ.get("HIVESEC_TELEGRAM_CHAT_ID", ""),
             github_token=os.environ.get("HIVESEC_GITHUB_TOKEN", ""),
             repository=os.environ.get("HIVESEC_GITHUB_REPOSITORY", "bashhive/bash-website"),
+            user_agent=public_context.user_agent,
         )
         if not all(publisher.publish(alert_from_input(alert)) for alert in alerts):
             return 1
@@ -51,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
         telegram_chat_id=os.environ.get("HIVESEC_TELEGRAM_CHAT_ID", ""),
         github_token=os.environ.get("HIVESEC_GITHUB_TOKEN", ""),
         repository=os.environ.get("HIVESEC_GITHUB_REPOSITORY", "bashhive/bash-website"),
+        user_agent=public_context.user_agent,
     )
     if not publisher.publish(alert):
         return 1

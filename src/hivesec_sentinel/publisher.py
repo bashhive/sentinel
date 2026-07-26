@@ -10,6 +10,14 @@ from urllib.request import Request, urlopen
 
 _SECRET = re.compile(r"\b(?:github_pat_|ghp_|sk-|xai-)[A-Za-z0-9_-]{16,}\b")
 _SEVERITIES = {"info", "warning", "critical"}
+_ALERT_FIELDS = {
+    "schema_version", "id", "title", "message", "severity", "source",
+    "published_at",
+}
+_PRIVATE_FIELDS = {
+    "victim", "email", "phone", "watchlist", "credential", "credentials",
+    "private_outbox", "personal_data",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,8 +31,10 @@ class PublicAlert:
     published_at: str
 
     @classmethod
-    def from_dict(cls, value: object) -> "PublicAlert":
-        if not isinstance(value, dict) or "victim" in value:
+    def from_dict(cls, value: object) -> PublicAlert:
+        if not isinstance(value, dict):
+            raise TypeError("public alert must be an object")
+        if set(value) != _ALERT_FIELDS or set(value) & _PRIVATE_FIELDS:
             raise ValueError("public alert must be an object without private identity")
         required = (
             "schema_version",
@@ -55,7 +65,13 @@ def sanitize(text: str, *, maximum: int = 3500) -> str:
 
 class Publisher:
     def __init__(
-        self, *, telegram_token: str, telegram_chat_id: str, github_token: str, repository: str
+        self,
+        *,
+        telegram_token: str,
+        telegram_chat_id: str,
+        github_token: str,
+        repository: str,
+        user_agent: str,
     ) -> None:
         if not all((telegram_token.strip(), telegram_chat_id.strip(), github_token.strip())):
             raise ValueError("HiveSec delivery credentials are incomplete")
@@ -67,6 +83,7 @@ class Publisher:
             telegram_chat_id.strip(),
         )
         self.github_token, self.repository = github_token.strip(), repository
+        self.user_agent = user_agent
 
     def publish(self, alert: PublicAlert) -> bool:
         alert = PublicAlert(
@@ -88,7 +105,7 @@ class Publisher:
                     "disable_web_page_preview": True,
                 }
             ).encode(),
-            headers={"Content-Type": "application/json", "User-Agent": "HiveSec-Sentinel/1.0"},
+            headers={"Content-Type": "application/json", "User-Agent": self.user_agent},
             method="POST",
         )
         return self._request(request, expected=200)
@@ -103,7 +120,7 @@ class Publisher:
                 "Accept": "application/vnd.github+json",
                 "Authorization": f"Bearer {self.github_token}",
                 "Content-Type": "application/json",
-                "User-Agent": "HiveSec-Sentinel/1.0",
+                "User-Agent": self.user_agent,
             },
             method="POST",
         )

@@ -23,6 +23,16 @@ def test_public_contract_rejects_private_identity() -> None:
         raise AssertionError("private data was accepted")
 
 
+def test_public_contract_rejects_unknown_fields() -> None:
+    value = alert() | {"internal_note": "not public contract data"}
+    try:
+        alert_from_input(value)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unknown public-contract data was accepted")
+
+
 def test_public_contract_and_secret_redaction() -> None:
     parsed = alert_from_input(alert())
     assert isinstance(parsed, PublicAlert)

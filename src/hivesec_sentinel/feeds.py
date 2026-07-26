@@ -11,7 +11,6 @@ from typing import Any
 from urllib.request import Request, urlopen
 
 KEV_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
-USER_AGENT = "HiveSec-Sentinel/1.0 (+https://hivesec.eu)"
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,8 +33,16 @@ def utc_now() -> datetime:
     return datetime.now(UTC).replace(microsecond=0)
 
 
-def fetch_json(url: str, *, opener: Callable[..., Any] = urlopen) -> dict[str, Any]:
-    request = Request(url, headers={"Accept": "application/json", "User-Agent": USER_AGENT})
+def fetch_json(
+    url: str,
+    *,
+    user_agent: str,
+    opener: Callable[..., Any] = urlopen,
+) -> dict[str, Any]:
+    request = Request(
+        url,
+        headers={"Accept": "application/json", "User-Agent": user_agent},
+    )
     with opener(request, timeout=20) as response:  # nosec - fixed official source URL
         if int(response.status) != 200:
             raise ValueError(f"source returned HTTP {response.status}")
@@ -106,13 +113,17 @@ def kev_alerts(
 
 
 def refresh_kev(
-    *, state_path: Path, lookback_days: int = 7, opener: Callable[..., Any] = urlopen
+    *,
+    state_path: Path,
+    user_agent: str,
+    lookback_days: int = 7,
+    opener: Callable[..., Any] = urlopen,
 ) -> tuple[list[dict[str, object]], SourceHealth]:
     now = utc_now()
     state = load_state(state_path)
     seen = {item for item in state.get("seen_ids", []) if isinstance(item, str)}
     try:
-        catalog = fetch_json(KEV_URL, opener=opener)
+        catalog = fetch_json(KEV_URL, user_agent=user_agent, opener=opener)
         alerts = kev_alerts(
             catalog, since=(now - timedelta(days=lookback_days)).date(), seen_ids=seen
         )
