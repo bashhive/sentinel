@@ -6,7 +6,7 @@ def alert() -> dict[str, object]:
         "schema_version": 1,
         "id": "hivesec-example",
         "title": "CVE update",
-        "message": "Atualizar sistemas.",
+        "message": "Update systems.",
         "severity": "warning",
         "source": "HiveSec Sentinel",
         "published_at": "2026-07-23T12:00:00+00:00",

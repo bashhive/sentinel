@@ -10,6 +10,7 @@ from pathlib import Path
 from .feeds import record_published, refresh_kev
 from .profile import resolve_public_brand
 from .publisher import Publisher, alert_from_input
+from .receipts import write_publication_receipts
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -48,8 +49,11 @@ def main(argv: list[str] | None = None) -> int:
             repository=os.environ.get("HIVESEC_GITHUB_REPOSITORY", "bashhive/bash-website"),
             user_agent=public_context.user_agent,
         )
-        if not all(publisher.publish(alert_from_input(alert)) for alert in alerts):
-            return 1
+        for value in alerts:
+            alert = alert_from_input(value)
+            if not publisher.publish(alert):
+                return 1
+            write_publication_receipts(alert, public_context)
         record_published(args.state, alerts)
         return 0
     alert = alert_from_input(json.loads(args.input.read_text(encoding="utf-8")))
@@ -65,4 +69,5 @@ def main(argv: list[str] | None = None) -> int:
     )
     if not publisher.publish(alert):
         return 1
+    write_publication_receipts(alert, public_context)
     return 0
