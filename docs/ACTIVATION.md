@@ -2,6 +2,21 @@
 
 HiveSec Sentinel is activated from this repository, independently from Butler.
 
+## Deployed state — 2026-07-26
+
+The hardened publisher is committed as
+`ef43d336448fd54f5dc98dda4fdb39b74a725687` on the review branch
+`codex/hivesec-feed-hardening`. It has been pushed to local GitLab and verified
+from a clean clone. The branch is intentionally not merged to `main` here.
+
+Sentinel remains the public publisher. It does not consume private scanner or
+Butler payloads, and no public delivery is implied by repository deployment.
+Every live publication still requires the `public_brand` profile, policy
+version, and an explicit attribution approval reference.
+
+The ecosystem-wide commit map, runtime health evidence, and restart procedure
+are in the [SecurityWork deployment handoff](../../SecurityWork/docs/ecosystem/ECOSYSTEM_DEPLOYMENT_HANDOFF_2026-07-26.md).
+
 ## Configure
 
 ```bash
