@@ -1,0 +1,31 @@
+stages:
+  - validate
+  - test
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+default:
+  image: python:3.12
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - /root/.cache/pip/
+
+before_script:
+  - python -m pip install --upgrade pip
+  - if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+  - if [ -f pyproject.toml ]; then pip install -e .; fi
+
+validate_repo:
+  stage: validate
+  script:
+    - test -f README.md
+    - test -d docs
+
+tests:
+  stage: test
+  script:
+    - if [ -d tests ]; then python -m pytest -q || python -m unittest discover -s tests -v; else python -m compileall .; fi
