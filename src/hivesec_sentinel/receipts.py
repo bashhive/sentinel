@@ -12,13 +12,15 @@ from pathlib import Path
 from .profile import PublicBrandContext
 from .publisher import PublicAlert
 
+DEFAULT_RECEIPT_DIR = Path.home() / "Library/Application Support/HiveSec Sentinel/publication_receipts"
+
 
 def write_publication_receipts(
     alert: PublicAlert,
     context: PublicBrandContext,
     *,
     channels: tuple[str, ...] = ("telegram", "github"),
-    receipt_dir: Path = Path("data/publication_receipts"),
+    receipt_dir: Path = DEFAULT_RECEIPT_DIR,
 ) -> list[Path]:
     canonical = json.dumps(
         alert.payload(), ensure_ascii=False, sort_keys=True, separators=(",", ":")

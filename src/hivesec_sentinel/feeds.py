@@ -121,14 +121,22 @@ def refresh_kev(
 ) -> tuple[list[dict[str, object]], SourceHealth]:
     now = utc_now()
     state = load_state(state_path)
-    seen = {item for item in state.get("seen_ids", []) if isinstance(item, str)}
+    prior_seen = {item for item in state.get("seen_ids", []) if isinstance(item, str)}
+    default_since = (now - timedelta(days=lookback_days)).date()
+
+    if not state_path.is_file() and not prior_seen:
+        since = date.min
+    else:
+        since = default_since
+
     try:
         catalog = fetch_json(KEV_URL, user_agent=user_agent, opener=opener)
-        alerts = kev_alerts(
-            catalog, since=(now - timedelta(days=lookback_days)).date(), seen_ids=seen
-        )
+        alerts = kev_alerts(catalog, since=since, seen_ids=prior_seen)
         health = SourceHealth(
-            "CISA KEV", now.isoformat(), "ok", f"{len(alerts)} new eligible entries"
+            "CISA KEV",
+            now.isoformat(),
+            "ok",
+            f"{len(alerts)} new eligible entries; old and seen alerts suppressed",
         )
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
         health = SourceHealth("CISA KEV", now.isoformat(), "error", str(error)[:160])
@@ -141,10 +149,12 @@ def refresh_kev(
 
 def record_published(state_path: Path, alerts: list[dict[str, object]]) -> None:
     """Record alert delivery only after all public channels accepted it."""
-
     state = load_state(state_path)
     seen = {item for item in state.get("seen_ids", []) if isinstance(item, str)}
-    state["seen_ids"] = sorted(
-        seen | {alert_id for alert in alerts if isinstance(alert_id := alert.get("id"), str)}
-    )[-1000:]
+    for alert in alerts:
+        alert_id = alert.get("id")
+        if isinstance(alert_id, str) and alert_id:
+            seen.add(alert_id)
+    state["seen_ids"] = sorted(seen)
+    state["last_published_at"] = utc_now().isoformat()
     save_state(state_path, state)

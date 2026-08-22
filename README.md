@@ -16,5 +16,9 @@ This repository contains the public publication code and contract for the BASH s
 `@hivesecsentinelbot`, and dispatches it to the BASH site feed. Credentials come only from
 the `HIVESEC_*` environment at runtime and must never be stored in this repository.
 
-See [PROJECT.md](PROJECT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
-[docs/ACTIVATION.md](docs/ACTIVATION.md).
+See [PROJECT.md](PROJECT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+[docs/ACTIVATION.md](docs/ACTIVATION.md) and [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+The macOS refresh job is installed from `config/launchd/com.hivesec.sentinel-feed-refresh.plist`;
+its wrapper uses the repository virtualenv, validates Keychain prerequisites, stores state and
+receipts under Application Support, and suppresses old or previously published alerts.

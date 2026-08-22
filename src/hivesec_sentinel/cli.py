@@ -49,12 +49,16 @@ def main(argv: list[str] | None = None) -> int:
             repository=os.environ.get("HIVESEC_GITHUB_REPOSITORY", "bashhive/bash-website"),
             user_agent=public_context.user_agent,
         )
+        published: list[dict[str, object]] = []
         for value in alerts:
             alert = alert_from_input(value)
-            if not publisher.publish(alert):
+            if publisher.publish(alert):
+                write_publication_receipts(alert, public_context)
+                published.append(value)
+            else:
+                print(f"publication failed for {alert.id}", file=__import__("sys").stderr)
                 return 1
-            write_publication_receipts(alert, public_context)
-        record_published(args.state, alerts)
+        record_published(args.state, published)
         return 0
     alert = alert_from_input(json.loads(args.input.read_text(encoding="utf-8")))
     if args.dry_run:

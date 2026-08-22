@@ -60,3 +60,24 @@ The refresh script uses only `com.hivesec.sentinel.*` Keychain entries. Run the
 one-time namespace migration script before installing the LaunchAgent. The job publishes a new alert only
 after both Telegram and the public-site dispatch succeed, then records it as delivered to prevent
 duplicates.
+
+## LaunchAgent
+
+The macOS LaunchAgent wrapper now exports the required execution-profile variables before invoking the CLI:
+
+- `SENTINEL_EXECUTION_PROFILE=public_brand`
+- `SENTINEL_POLICY_VERSION=execution-profiles-v1`
+- `SENTINEL_ATTRIBUTION_APPROVAL_REF=launchd-kev-refresh` (override if you need a different approval reference)
+- `SENTINEL_USER_AGENT=HiveSec-Sentinel/1.0 (+https://hivesec.eu)`
+
+Before enabling the agent, ensure the virtual environment exists and the package is installed:
+
+```bash
+cd /Users/raf/Code/sentinel
+python3.11 -m venv .venv
+. .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e '.[dev]'
+```
+
+The wrapper also fails fast with a clear error if `.venv/bin/hivesec-sentinel` is missing.
