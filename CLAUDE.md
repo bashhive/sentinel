@@ -39,20 +39,26 @@ python3.11 -m venv .venv && .venv/bin/python -m pip install -e '.[dev]'
 
 # CLI dry runs (need the SENTINEL_* env below; no HIVESEC_* credentials needed for --dry-run)
 .venv/bin/hivesec-sentinel publish alert.json --dry-run
-.venv/bin/hivesec-sentinel refresh-kev --state /tmp/state.json --dry-run
+.venv/bin/hivesec-sentinel refresh-kev --state /tmp/state.json --lookback-days 7 --dry-run
 ```
 
-There is no `requirements.txt`; CI (`.gitlab-ci.yml`) does `pip install -e .` then `pytest -q`.
+`refresh-kev` defaults to `--state data/feed_state.json` (`data/` is gitignored) and
+`--lookback-days 7` (accepted range 1–30). It exits 1 whenever KEV source health is not `ok`,
+even with `--dry-run`, so a failed fetch looks like a failed run.
+
+There is no `requirements.txt`; CI (`.gitlab-ci.yml`, python:3.12 image) does `pip install -e .`
+(no `[dev]` extras) then `pytest -q`.
 
 ## Required environment
 
-`cli.main` calls `profile.resolve_public_brand(os.environ)` **before** parsing which subcommand
-runs, so every invocation — including `--dry-run` — fails unless:
+`cli.main` calls `profile.resolve_public_brand(os.environ)` right after argparse and before any
+subcommand logic, so every invocation — including `--dry-run` — fails unless:
 
 - `SENTINEL_EXECUTION_PROFILE=public_brand`
 - `SENTINEL_POLICY_VERSION=execution-profiles-v1` (default if unset; any other value rejected)
 - `SENTINEL_ATTRIBUTION_APPROVAL_REF=<3–160 chars>`
 - `SENTINEL_USER_AGENT` optional (defaults to `HiveSec-Sentinel/1.0 (+https://hivesec.eu)`)
+- `SENTINEL_SOURCE_REVISION` optional; if set it is copied into each receipt as `source_revision`
 
 Live publishing additionally needs `HIVESEC_TELEGRAM_BOT_TOKEN`, `HIVESEC_TELEGRAM_CHAT_ID`,
 `HIVESEC_GITHUB_TOKEN`, and optionally `HIVESEC_GITHUB_REPOSITORY` (default `bashhive/bash-website`).
@@ -73,7 +79,11 @@ Module responsibilities:
   info/warning/critical, message ≤ 3500 chars). `from_dict` rejects **any** extra field, not just
   the `_PRIVATE_FIELDS` list — adding a field to the contract requires bumping `schema_version` and
   updating the BASH site receiver. `sanitize()` strips control chars and redacts token-shaped
-  strings before delivery. `Publisher._request` swallows all network errors into `False`.
+  strings before delivery (title capped at 120 chars). `Publisher._request` swallows all network
+  errors into `False`. The GitHub call is `repository_dispatch` with `event_type: security-alert`
+  and the alert payload as `client_payload`; the receiving site repo is `bashhive/bash-website`
+  (local checkout `/Users/raf/Code/BASH_site/public_html` per README), so contract changes must
+  land there too.
 - `feeds.py` — KEV collection and the delivery-state file (`schema_version: 1`, `seen_ids`,
   `source_health`). `refresh_kev` only *reads* `seen_ids` and writes health; IDs are added to
   `seen_ids` by `record_published`, which the CLI calls **only after every alert in the batch was
@@ -84,8 +94,11 @@ Module responsibilities:
   `~/Library/Application Support/HiveSec Sentinel/publication_receipts/` (0700 dir, 0600 files,
   atomic rename). Receipts deliberately contain the payload SHA-256 and profile metadata but
   **not** the alert title/message; tests assert this.
-- `cli.py` — `publish <file>` (single alert) and `refresh-kev` (batch). Publication of a batch
-  stops at the first failure and returns 1 without recording anything as seen.
+- `cli.py` — `publish <file>` (single alert; never touches the state file) and `refresh-kev`
+  (batch). Publication of a batch stops at the first failure and returns 1 without recording
+  anything as seen. Consequence: alerts delivered earlier in that same batch already have
+  receipts but are **not** in `seen_ids`, so the next run re-sends them. This is the accepted
+  trade-off (at-least-once delivery); don't "fix" it by recording per-alert without discussion.
 
 Network is injected for testability: `feeds.fetch_json`/`refresh_kev` take an `opener` callable
 (tests pass a lambda returning a fake response object), and `write_publication_receipts` takes a
@@ -94,12 +107,17 @@ tests that make live calls; add an injection point instead.
 
 ## Operations surface
 
-- `scripts/refresh_public_feed.sh` (zsh) is what launchd runs: exports the SENTINEL_* env,
-  verifies `.venv/bin/hivesec-sentinel` exists, pulls the three secrets from Keychain, then execs
-  `refresh-kev --state "~/Library/Application Support/HiveSec Sentinel/feed_state.json"`.
+- `scripts/refresh_public_feed.sh` (zsh) is what launchd runs: exports the SENTINEL_* env with
+  `${VAR:-default}` fallbacks, verifies `.venv/bin/hivesec-sentinel` exists (and pip-installs
+  `.[dev]` into the venv if it is missing), pulls the three secrets from Keychain
+  (`com.hivesec.sentinel.telegram`, `.telegram-chat-id`, `.github`), then execs
+  `refresh-kev --state "~/Library/Application Support/HiveSec Sentinel/feed_state.json"
+  --lookback-days "${SENTINEL_LOOKBACK_DAYS:-7}"`.
 - `config/launchd/com.hivesec.sentinel-feed-refresh.plist` — 21600 s interval, `RunAtLoad`; logs to
   `~/Library/Logs/HiveSecSentinel/`. Absolute paths to `/Users/raf/Code/sentinel` are hard-coded
-  in both the plist and the script.
+  in both the plist and the script. The plist's `EnvironmentVariables` win over the script's
+  defaults, so the live attribution ref is `PUBLIC-PUBLISH-2026-001` from the plist, not the
+  `launchd-kev-refresh` fallback that the script and `docs/ACTIVATION.md` mention.
 - `scripts/migrate_keychain_namespace.sh` — one-time copy from legacy `com.butler.hivesec.*`
   Keychain services to `com.hivesec.sentinel.*`.
 - `docs/OPERATIONS.md` has the restart / inspect / recovery `launchctl` commands. Changing the
