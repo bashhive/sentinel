@@ -42,13 +42,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if health.status == "ok" else 1
         if health.status != "ok":
             return 1
-        publisher = Publisher(
-            telegram_token=os.environ.get("HIVESEC_TELEGRAM_BOT_TOKEN", ""),
-            telegram_chat_id=os.environ.get("HIVESEC_TELEGRAM_CHAT_ID", ""),
-            github_token=os.environ.get("HIVESEC_GITHUB_TOKEN", ""),
-            repository=os.environ.get("HIVESEC_GITHUB_REPOSITORY", "bashhive/bash-website"),
-            user_agent=public_context.user_agent,
-        )
+        publisher = Publisher.from_env(os.environ, user_agent=public_context.user_agent)
         published: list[dict[str, object]] = []
         for value in alerts:
             alert = alert_from_input(value)
@@ -64,13 +58,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.dry_run:
         print(json.dumps(alert.payload(), ensure_ascii=False))
         return 0
-    publisher = Publisher(
-        telegram_token=os.environ.get("HIVESEC_TELEGRAM_BOT_TOKEN", ""),
-        telegram_chat_id=os.environ.get("HIVESEC_TELEGRAM_CHAT_ID", ""),
-        github_token=os.environ.get("HIVESEC_GITHUB_TOKEN", ""),
-        repository=os.environ.get("HIVESEC_GITHUB_REPOSITORY", "bashhive/bash-website"),
-        user_agent=public_context.user_agent,
-    )
+    publisher = Publisher.from_env(os.environ, user_agent=public_context.user_agent)
     if not publisher.publish(alert):
         return 1
     write_publication_receipts(alert, public_context)

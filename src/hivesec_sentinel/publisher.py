@@ -64,26 +64,75 @@ def sanitize(text: str, *, maximum: int = 3500) -> str:
 
 
 class Publisher:
+    """Deliver a PublicAlert to Telegram and to the BASH site.
+
+    The site channel is one of:
+
+    * **Worker intake** (preferred, since 9 Sep 2026): ``POST intake_url`` on the
+      ``bash-site`` Cloudflare Worker, authenticated with a Cloudflare Access
+      *service token* (``CF-Access-Client-Id`` / ``CF-Access-Client-Secret``).
+      The Worker validates the same contract and writes the public feed to KV.
+    * **GitHub dispatch** (legacy): ``repository_dispatch`` ``security-alert`` at
+      ``repository``; a GitHub Actions workflow validates and commits the feed.
+
+    Configure exactly one. When both are configured the Worker intake wins.
+    """
+
     def __init__(
         self,
         *,
         telegram_token: str,
         telegram_chat_id: str,
-        github_token: str,
-        repository: str,
         user_agent: str,
+        github_token: str = "",
+        repository: str = "",
+        intake_url: str = "",
+        intake_client_id: str = "",
+        intake_client_secret: str = "",
+        opener=urlopen,
     ) -> None:
-        if not all((telegram_token.strip(), telegram_chat_id.strip(), github_token.strip())):
+        if not all((telegram_token.strip(), telegram_chat_id.strip())):
             raise ValueError("HiveSec delivery credentials are incomplete")
-        owner, slash, name = repository.partition("/")
-        if not slash or not owner or not name or "/" in name:
-            raise ValueError("repository must use owner/name format")
         self.telegram_token, self.telegram_chat_id = (
             telegram_token.strip(),
             telegram_chat_id.strip(),
         )
-        self.github_token, self.repository = github_token.strip(), repository
         self.user_agent = user_agent
+        self._opener = opener
+
+        self.intake_url = intake_url.strip()
+        self.intake_client_id = intake_client_id.strip()
+        self.intake_client_secret = intake_client_secret.strip()
+        self.github_token, self.repository = github_token.strip(), repository.strip()
+
+        if self.intake_url:
+            if not self.intake_url.startswith("https://"):
+                raise ValueError("intake_url must be https")
+            if not (self.intake_client_id and self.intake_client_secret):
+                raise ValueError("HiveSec intake service token is incomplete")
+        elif self.github_token:
+            owner, slash, name = self.repository.partition("/")
+            if not slash or not owner or not name or "/" in name:
+                raise ValueError("repository must use owner/name format")
+        else:
+            raise ValueError("HiveSec delivery credentials are incomplete")
+
+    @classmethod
+    def from_env(cls, environ, *, user_agent: str) -> Publisher:
+        return cls(
+            telegram_token=environ.get("HIVESEC_TELEGRAM_BOT_TOKEN", ""),
+            telegram_chat_id=environ.get("HIVESEC_TELEGRAM_CHAT_ID", ""),
+            github_token=environ.get("HIVESEC_GITHUB_TOKEN", ""),
+            repository=environ.get("HIVESEC_GITHUB_REPOSITORY", "bashhive/bash-website"),
+            intake_url=environ.get("HIVESEC_INTAKE_URL", ""),
+            intake_client_id=environ.get("HIVESEC_CF_CLIENT_ID", ""),
+            intake_client_secret=environ.get("HIVESEC_CF_CLIENT_SECRET", ""),
+            user_agent=user_agent,
+        )
+
+    @property
+    def site_channel(self) -> str:
+        return "worker" if self.intake_url else "github"
 
     def publish(self, alert: PublicAlert) -> bool:
         alert = PublicAlert(
@@ -93,7 +142,24 @@ class Publisher:
                 "message": sanitize(alert.message),
             }
         )
-        return self._telegram(alert) and self._github(alert)
+        return self._telegram(alert) and self._site(alert)
+
+    def _site(self, alert: PublicAlert) -> bool:
+        return self._worker(alert) if self.intake_url else self._github(alert)
+
+    def _worker(self, alert: PublicAlert) -> bool:
+        request = Request(
+            self.intake_url,
+            data=json.dumps(alert.payload()).encode(),
+            headers={
+                "CF-Access-Client-Id": self.intake_client_id,
+                "CF-Access-Client-Secret": self.intake_client_secret,
+                "Content-Type": "application/json",
+                "User-Agent": self.user_agent,
+            },
+            method="POST",
+        )
+        return self._request(request, expected=200)
 
     def _telegram(self, alert: PublicAlert) -> bool:
         request = Request(
@@ -126,10 +192,9 @@ class Publisher:
         )
         return self._request(request, expected=204)
 
-    @staticmethod
-    def _request(request: Request, *, expected: int) -> bool:
+    def _request(self, request: Request, *, expected: int) -> bool:
         try:
-            with urlopen(request, timeout=10) as response:  # nosec - fixed public endpoints
+            with self._opener(request, timeout=10) as response:  # nosec - fixed public endpoints
                 return int(response.status) == expected
         except (HTTPError, URLError, TimeoutError, OSError):
             return False

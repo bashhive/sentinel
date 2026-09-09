@@ -60,9 +60,19 @@ subcommand logic, so every invocation — including `--dry-run` — fails unless
 - `SENTINEL_USER_AGENT` optional (defaults to `HiveSec-Sentinel/1.0 (+https://hivesec.eu)`)
 - `SENTINEL_SOURCE_REVISION` optional; if set it is copied into each receipt as `source_revision`
 
-Live publishing additionally needs `HIVESEC_TELEGRAM_BOT_TOKEN`, `HIVESEC_TELEGRAM_CHAT_ID`,
-`HIVESEC_GITHUB_TOKEN`, and optionally `HIVESEC_GITHUB_REPOSITORY` (default `bashhive/bash-website`).
-`Publisher.__init__` raises if any of the three credentials is blank.
+Live publishing additionally needs `HIVESEC_TELEGRAM_BOT_TOKEN`, `HIVESEC_TELEGRAM_CHAT_ID` and ONE
+site channel (`Publisher.from_env` picks it; `__init__` raises if neither is complete):
+
+- **Worker intake** (preferred since 9 Sep 2026): `HIVESEC_INTAKE_URL` (default in the wrapper:
+  `https://hivesec.eu/api/sentinel/alert`), `HIVESEC_CF_CLIENT_ID`, `HIVESEC_CF_CLIENT_SECRET` — a
+  Cloudflare Access *service token*, Keychain items `com.hivesec.sentinel.cf-client-id` /
+  `.cf-client-secret`. The `bash-site` Worker validates the same `PublicAlert` contract and writes
+  the public feed to KV. Expected response: HTTP 200.
+- **GitHub dispatch** (legacy): `HIVESEC_GITHUB_TOKEN`, optionally `HIVESEC_GITHUB_REPOSITORY`
+  (default `bashhive/bash-website`). Expected response: HTTP 204.
+
+The wrapper script uses the Worker intake whenever both Keychain items exist and falls back to the
+GitHub token otherwise. See `bash-website/CUTOVER_ACCESS_LOGIN_20260909.md`.
 
 ## Architecture
 

@@ -26,7 +26,7 @@ if [[ ! -x "$repo_dir/.venv/bin/hivesec-sentinel" ]]; then
   "$python_bin" -m pip install -e "$repo_dir[dev]" >/dev/null
 fi
 
-for service in com.hivesec.sentinel.telegram com.hivesec.sentinel.telegram-chat-id com.hivesec.sentinel.github; do
+for service in com.hivesec.sentinel.telegram com.hivesec.sentinel.telegram-chat-id; do
   if ! security find-generic-password -s "$service" -w >/dev/null 2>&1; then
     echo "missing Keychain item: $service" >&2
     exit 1
@@ -34,6 +34,25 @@ for service in com.hivesec.sentinel.telegram com.hivesec.sentinel.telegram-chat-
 done
 export HIVESEC_TELEGRAM_BOT_TOKEN="$(security find-generic-password -s com.hivesec.sentinel.telegram -w)"
 export HIVESEC_TELEGRAM_CHAT_ID="$(security find-generic-password -s com.hivesec.sentinel.telegram-chat-id -w)"
-export HIVESEC_GITHUB_TOKEN="$(security find-generic-password -s com.hivesec.sentinel.github -w)"
+
+# Site channel. Preferred: the bash-site Worker intake, authenticated with a
+# Cloudflare Access service token stored in Keychain as
+#   com.hivesec.sentinel.cf-client-id / com.hivesec.sentinel.cf-client-secret
+# Legacy: GitHub repository_dispatch with com.hivesec.sentinel.github.
+# The Worker intake is used whenever both Keychain items exist; otherwise the
+# GitHub token is required. See bash-website/CUTOVER_ACCESS_LOGIN_20260909.md.
+export HIVESEC_INTAKE_URL="${HIVESEC_INTAKE_URL:-https://hivesec.eu/api/sentinel/alert}"
+if security find-generic-password -s com.hivesec.sentinel.cf-client-id -w >/dev/null 2>&1 \
+   && security find-generic-password -s com.hivesec.sentinel.cf-client-secret -w >/dev/null 2>&1; then
+  export HIVESEC_CF_CLIENT_ID="$(security find-generic-password -s com.hivesec.sentinel.cf-client-id -w)"
+  export HIVESEC_CF_CLIENT_SECRET="$(security find-generic-password -s com.hivesec.sentinel.cf-client-secret -w)"
+else
+  unset HIVESEC_INTAKE_URL
+  if ! security find-generic-password -s com.hivesec.sentinel.github -w >/dev/null 2>&1; then
+    echo "missing Keychain item: com.hivesec.sentinel.github (or the cf-client-id/cf-client-secret pair)" >&2
+    exit 1
+  fi
+  export HIVESEC_GITHUB_TOKEN="$(security find-generic-password -s com.hivesec.sentinel.github -w)"
+fi
 
 exec "$repo_dir/.venv/bin/hivesec-sentinel" refresh-kev --state "$state_path" --lookback-days "${SENTINEL_LOOKBACK_DAYS:-7}"
