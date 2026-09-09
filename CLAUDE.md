@@ -112,8 +112,8 @@ Module responsibilities:
 
 Network is injected for testability: `feeds.fetch_json`/`refresh_kev` take an `opener` callable
 (tests pass a lambda returning a fake response object), and `write_publication_receipts` takes a
-`receipt_dir`. `Publisher.publish` hits real `urlopen` and is not covered by tests — don't add
-tests that make live calls; add an injection point instead.
+`receipt_dir`. `Publisher` takes an `opener` (defaults to `urlopen`); `tests/test_publisher.py` injects a fake
+and asserts the request shape — never make live calls from tests.
 
 ## Operations surface
 
