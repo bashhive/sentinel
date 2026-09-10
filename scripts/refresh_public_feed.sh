@@ -42,14 +42,20 @@ export HIVESEC_TELEGRAM_CHAT_ID="$(security find-generic-password -s com.hivesec
 # The Worker intake is used whenever both Keychain items exist; otherwise the
 # GitHub token is required. See bash-website/CUTOVER_ACCESS_LOGIN_20260909.md.
 export HIVESEC_INTAKE_URL="${HIVESEC_INTAKE_URL:-https://hivesec.eu/api/sentinel/alert}"
-if security find-generic-password -s com.hivesec.sentinel.cf-client-id -w >/dev/null 2>&1 \
+if security find-generic-password -s com.hivesec.sentinel.intake-token -w >/dev/null 2>&1; then
+  # Preferred: shared secret, matched against the Worker's INTAKE_SECRET.
+  export HIVESEC_INTAKE_TOKEN="$(security find-generic-password -s com.hivesec.sentinel.intake-token -w)"
+elif security find-generic-password -s com.hivesec.sentinel.cf-client-id -w >/dev/null 2>&1 \
    && security find-generic-password -s com.hivesec.sentinel.cf-client-secret -w >/dev/null 2>&1; then
+  # Legacy: Cloudflare Access service token (only works while an Access intake app exists).
   export HIVESEC_CF_CLIENT_ID="$(security find-generic-password -s com.hivesec.sentinel.cf-client-id -w)"
   export HIVESEC_CF_CLIENT_SECRET="$(security find-generic-password -s com.hivesec.sentinel.cf-client-secret -w)"
 else
+  # Last resort: GitHub repository_dispatch. Loses alerts in bursts — see the
+  # bash-website audit — so keep the intake token present.
   unset HIVESEC_INTAKE_URL
   if ! security find-generic-password -s com.hivesec.sentinel.github -w >/dev/null 2>&1; then
-    echo "missing Keychain item: com.hivesec.sentinel.github (or the cf-client-id/cf-client-secret pair)" >&2
+    echo "missing Keychain item: com.hivesec.sentinel.intake-token (or the cf pair, or .github)" >&2
     exit 1
   fi
   export HIVESEC_GITHUB_TOKEN="$(security find-generic-password -s com.hivesec.sentinel.github -w)"

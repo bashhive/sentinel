@@ -126,3 +126,48 @@ def test_worker_intake_wins_over_github_and_requires_https_and_full_token() -> N
             pass
         else:
             raise AssertionError("misconfigured publisher was accepted")
+
+
+def test_shared_secret_intake_uses_token_header() -> None:
+    from hivesec_sentinel.publisher import Publisher
+
+    calls, opener = _capture(200)
+    publisher = Publisher(
+        telegram_token="t",
+        telegram_chat_id="c",
+        intake_url="https://hivesec.eu/api/sentinel/alert",
+        intake_token="shared-secret-value",
+        user_agent="HiveSec-Sentinel/test",
+        opener=opener,
+    )
+    assert publisher.site_channel == "worker"
+    assert publisher.publish(alert_from_input(alert())) is True
+    intake = calls[1]
+    assert intake.get_header("X-hivesec-token") == "shared-secret-value"
+    assert intake.get_header("Cf-access-client-id") is None
+
+
+def test_shared_secret_wins_over_service_token_and_is_required() -> None:
+    from hivesec_sentinel.publisher import Publisher
+
+    env = {
+        "HIVESEC_TELEGRAM_BOT_TOKEN": "t",
+        "HIVESEC_TELEGRAM_CHAT_ID": "c",
+        "HIVESEC_INTAKE_URL": "https://hivesec.eu/api/sentinel/alert",
+        "HIVESEC_INTAKE_TOKEN": "shared",
+        "HIVESEC_CF_CLIENT_ID": "id",
+        "HIVESEC_CF_CLIENT_SECRET": "secret",
+    }
+    _, opener = _capture(200)
+    both = Publisher.from_env(env, user_agent="ua")
+    both._opener = opener
+    both.publish(alert_from_input(alert()))
+    assert both.intake_token == "shared"
+
+    bare = {k: v for k, v in env.items() if not k.startswith(("HIVESEC_INTAKE_TOKEN", "HIVESEC_CF"))}
+    try:
+        Publisher.from_env(bare, user_agent="ua")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("intake URL with no credentials was accepted")

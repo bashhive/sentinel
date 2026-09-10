@@ -68,10 +68,12 @@ class Publisher:
 
     The site channel is one of:
 
-    * **Worker intake** (preferred, since 9 Sep 2026): ``POST intake_url`` on the
-      ``bash-site`` Cloudflare Worker, authenticated with a Cloudflare Access
-      *service token* (``CF-Access-Client-Id`` / ``CF-Access-Client-Secret``).
-      The Worker validates the same contract and writes the public feed to KV.
+    * **Worker intake** (preferred): ``POST intake_url`` on the ``bash-site``
+      Cloudflare Worker, authenticated either with a shared secret in the
+      ``X-HiveSec-Token`` header (current) or, if an Access intake application
+      exists, with a Cloudflare Access *service token* (``CF-Access-Client-Id`` /
+      ``CF-Access-Client-Secret``). The Worker validates the same contract and
+      writes the public feed to KV.
     * **GitHub dispatch** (legacy): ``repository_dispatch`` ``security-alert`` at
       ``repository``; a GitHub Actions workflow validates and commits the feed.
 
@@ -87,6 +89,7 @@ class Publisher:
         github_token: str = "",
         repository: str = "",
         intake_url: str = "",
+        intake_token: str = "",
         intake_client_id: str = "",
         intake_client_secret: str = "",
         opener=urlopen,
@@ -101,6 +104,7 @@ class Publisher:
         self._opener = opener
 
         self.intake_url = intake_url.strip()
+        self.intake_token = intake_token.strip()
         self.intake_client_id = intake_client_id.strip()
         self.intake_client_secret = intake_client_secret.strip()
         self.github_token, self.repository = github_token.strip(), repository.strip()
@@ -108,8 +112,10 @@ class Publisher:
         if self.intake_url:
             if not self.intake_url.startswith("https://"):
                 raise ValueError("intake_url must be https")
-            if not (self.intake_client_id and self.intake_client_secret):
-                raise ValueError("HiveSec intake service token is incomplete")
+            has_token = bool(self.intake_token)
+            has_service_token = bool(self.intake_client_id and self.intake_client_secret)
+            if not (has_token or has_service_token):
+                raise ValueError("HiveSec intake credentials are incomplete")
         elif self.github_token:
             owner, slash, name = self.repository.partition("/")
             if not slash or not owner or not name or "/" in name:
@@ -125,6 +131,7 @@ class Publisher:
             github_token=environ.get("HIVESEC_GITHUB_TOKEN", ""),
             repository=environ.get("HIVESEC_GITHUB_REPOSITORY", "bashhive/bash-website"),
             intake_url=environ.get("HIVESEC_INTAKE_URL", ""),
+            intake_token=environ.get("HIVESEC_INTAKE_TOKEN", ""),
             intake_client_id=environ.get("HIVESEC_CF_CLIENT_ID", ""),
             intake_client_secret=environ.get("HIVESEC_CF_CLIENT_SECRET", ""),
             user_agent=user_agent,
@@ -148,12 +155,19 @@ class Publisher:
         return self._worker(alert) if self.intake_url else self._github(alert)
 
     def _worker(self, alert: PublicAlert) -> bool:
+        # Shared secret (current) or Cloudflare Access service token (dormant).
+        if self.intake_token:
+            auth = {"X-HiveSec-Token": self.intake_token}
+        else:
+            auth = {
+                "CF-Access-Client-Id": self.intake_client_id,
+                "CF-Access-Client-Secret": self.intake_client_secret,
+            }
         request = Request(
             self.intake_url,
             data=json.dumps(alert.payload()).encode(),
             headers={
-                "CF-Access-Client-Id": self.intake_client_id,
-                "CF-Access-Client-Secret": self.intake_client_secret,
+                **auth,
                 "Content-Type": "application/json",
                 "User-Agent": self.user_agent,
             },
