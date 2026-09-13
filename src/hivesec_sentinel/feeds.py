@@ -118,13 +118,23 @@ def refresh_kev(
     user_agent: str,
     lookback_days: int = 7,
     opener: Callable[..., Any] = urlopen,
+    bootstrap: bool = True,
 ) -> tuple[list[dict[str, object]], SourceHealth]:
+    """Collect eligible KEV entries.
+
+    ``bootstrap`` controls the first run only, when no state file exists. True
+    ignores the lookback and returns the whole catalogue (~1300 entries, one
+    Telegram message each) — the historical behaviour, kept as the default so
+    callers that want it are unaffected. The CLI passes ``bootstrap=False``
+    unless ``--bootstrap`` is given, so deleting the state file during recovery
+    no longer floods the public channel.
+    """
     now = utc_now()
     state = load_state(state_path)
     prior_seen = {item for item in state.get("seen_ids", []) if isinstance(item, str)}
     default_since = (now - timedelta(days=lookback_days)).date()
 
-    if not state_path.is_file() and not prior_seen:
+    if bootstrap and not state_path.is_file() and not prior_seen:
         since = date.min
     else:
         since = default_since

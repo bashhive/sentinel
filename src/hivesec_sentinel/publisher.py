@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import asdict, dataclass
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+logger = logging.getLogger("hivesec_sentinel.publisher")
 
 _SECRET = re.compile(r"\b(?:github_pat_|ghp_|sk-|xai-)[A-Za-z0-9_-]{16,}\b")
 _SEVERITIES = {"info", "warning", "critical"}
@@ -142,6 +145,16 @@ class Publisher:
         return "worker" if self.intake_url else "github"
 
     def publish(self, alert: PublicAlert) -> bool:
+        """Deliver to every configured channel; True only if all accepted."""
+        return all(self.publish_detailed(alert).values())
+
+    def publish_detailed(self, alert: PublicAlert) -> dict[str, bool]:
+        """Per-channel delivery outcome, e.g. ``{"telegram": True, "worker": False}``.
+
+        Telegram is attempted first and the site channel second, as before. The
+        caller decides what a partial success means: a channel that accepted the
+        alert must not be re-sent on the next run just because another failed.
+        """
         alert = PublicAlert(
             **{
                 **alert.payload(),
@@ -149,7 +162,10 @@ class Publisher:
                 "message": sanitize(alert.message),
             }
         )
-        return self._telegram(alert) and self._site(alert)
+        return {
+            "telegram": self._telegram(alert),
+            self.site_channel: self._site(alert),
+        }
 
     def _site(self, alert: PublicAlert) -> bool:
         return self._worker(alert) if self.intake_url else self._github(alert)
@@ -173,7 +189,7 @@ class Publisher:
             },
             method="POST",
         )
-        return self._request(request, expected=200)
+        return self._request(request, expected=200, channel="worker")
 
     def _telegram(self, alert: PublicAlert) -> bool:
         request = Request(
@@ -188,7 +204,7 @@ class Publisher:
             headers={"Content-Type": "application/json", "User-Agent": self.user_agent},
             method="POST",
         )
-        return self._request(request, expected=200)
+        return self._request(request, expected=200, channel="telegram")
 
     def _github(self, alert: PublicAlert) -> bool:
         request = Request(
@@ -204,14 +220,41 @@ class Publisher:
             },
             method="POST",
         )
-        return self._request(request, expected=204)
+        return self._request(request, expected=204, channel="github")
 
-    def _request(self, request: Request, *, expected: int) -> bool:
+    def _request(self, request: Request, *, expected: int, channel: str = "") -> bool:
+        """Perform one delivery call.
+
+        Failures are still contained (the caller gets False, never an
+        exception), but they are no longer silent: every non-expected status
+        and every transport error is logged with the channel, the host and the
+        reason, so a blocked intake (302), a revoked token (401) and a DNS
+        failure are distinguishable in the LaunchAgent log.
+        """
+        host = request.host or request.full_url
         try:
             with self._opener(request, timeout=10) as response:  # nosec - fixed public endpoints
-                return int(response.status) == expected
-        except (HTTPError, URLError, TimeoutError, OSError):
+                status = int(response.status)
+        except HTTPError as error:
+            logger.warning(
+                "delivery failed: channel=%s host=%s status=%s reason=http_error",
+                channel, host, error.code,
+            )
             return False
+        except (URLError, TimeoutError, OSError) as error:
+            logger.warning(
+                "delivery failed: channel=%s host=%s reason=%s detail=%.120s",
+                channel, host, type(error).__name__, error,
+            )
+            return False
+        if status != expected:
+            logger.warning(
+                "delivery rejected: channel=%s host=%s status=%s expected=%s",
+                channel, host, status, expected,
+            )
+            return False
+        logger.info("delivery accepted: channel=%s host=%s status=%s", channel, host, status)
+        return True
 
 
 def alert_from_input(value: object) -> PublicAlert:

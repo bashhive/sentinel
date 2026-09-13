@@ -164,7 +164,10 @@ def test_shared_secret_wins_over_service_token_and_is_required() -> None:
     both.publish(alert_from_input(alert()))
     assert both.intake_token == "shared"
 
-    bare = {k: v for k, v in env.items() if not k.startswith(("HIVESEC_INTAKE_TOKEN", "HIVESEC_CF"))}
+    bare = {
+        k: v for k, v in env.items()
+        if not k.startswith(("HIVESEC_INTAKE_TOKEN", "HIVESEC_CF"))
+    }
     try:
         Publisher.from_env(bare, user_agent="ua")
     except ValueError:

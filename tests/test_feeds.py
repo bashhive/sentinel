@@ -65,3 +65,29 @@ def test_refresh_persists_source_health_and_seen_ids(tmp_path: Path) -> None:
     assert not state["seen_ids"]
     record_published(state_path, alerts)
     assert "hivesec-kev-cve-2026-1000" in load_state(state_path)["seen_ids"]
+
+
+def test_refresh_without_bootstrap_applies_the_lookback_on_a_new_state(tmp_path: Path) -> None:
+    """A missing state file must not publish the whole catalogue by default."""
+
+    class Response:
+        status = 200
+
+        def read(self) -> bytes:
+            return json.dumps(catalog()).encode()
+
+        def __enter__(self) -> Self:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+    alerts, health = refresh_kev(
+        state_path=tmp_path / "state.json",
+        user_agent="HiveSec-Sentinel-Test/1.0",
+        opener=lambda *_args, **_kwargs: Response(),
+        bootstrap=False,
+    )
+    assert health.status == "ok"
+    # The fixture entry is dated 2026-07-24, far outside any 1-30 day lookback.
+    assert alerts == []
