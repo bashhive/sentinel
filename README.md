@@ -28,3 +28,8 @@ See [PROJECT.md](PROJECT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 The macOS refresh job is installed from `config/launchd/com.hivesec.sentinel-feed-refresh.plist`;
 its wrapper uses the repository virtualenv, validates Keychain prerequisites, stores state and
 receipts under Application Support, and suppresses old or previously published alerts.
+
+Delivery is tracked per alert and per channel: an alert is marked as seen as soon as the channel
+named by `--record-on` (default `telegram`) accepts it, each attempt is logged with its real
+status, `--max-batch` bounds a single run, and the full catalogue is published only with an
+explicit `--bootstrap`. See [CHANGELOG.md](CHANGELOG.md) for 2026-09-13.

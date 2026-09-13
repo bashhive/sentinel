@@ -44,8 +44,23 @@ decide, rather than leaving a scheduled job that silently delivers nothing.
 - Standard output: `~/Library/Logs/HiveSecSentinel/feed-refresh.log`
 - Errors: `~/Library/Logs/HiveSecSentinel/feed-refresh-error.log`
 
-The state file records `seen_ids` only after successful publication. Alerts older
-than the configured lookback or already present in `seen_ids` are suppressed.
+The state file records `seen_ids` per alert, as soon as the channel named by
+`--record-on` (default `telegram`) accepts it. Alerts older than the configured
+lookback or already present in `seen_ids` are suppressed. Until 2026-09-13 the
+whole batch had to succeed on **both** channels before anything was recorded,
+which — with the site intake blocked — re-sent the same alerts to Telegram every
+six hours.
+
+Every delivery attempt now logs one line per channel with the real outcome:
+
+```bash
+grep 'delivery ' ~/Library/Logs/HiveSecSentinel/feed-refresh-error.log | tail -20
+# delivery accepted: channel=telegram host=api.telegram.org status=200
+# delivery failed:   channel=worker host=hivesec.eu status=302 reason=http_error
+```
+
+A 302 there is the Access block; a 401 is a bad or revoked token; a
+`reason=URLError` line is the network. They used to be indistinguishable.
 
 ## Validate
 
@@ -78,6 +93,17 @@ tail -n 120 ~/Library/Logs/HiveSecSentinel/feed-refresh.log
 If a bad state must be discarded, stop the agent, remove only the state file, then
 restart it. This intentionally re-evaluates the feed and should be followed by a
 manual review of the first publication batch.
+
+A missing state file no longer publishes the whole KEV catalogue: the CLI applies
+the normal lookback unless `--bootstrap` is passed, and `--max-batch` (default 25)
+bounds any single run. If you really do want the full catalogue, run it by hand
+once, with your eyes on it:
+
+```bash
+.venv/bin/hivesec-sentinel refresh-kev \
+  --state "$HOME/Library/Application Support/HiveSec Sentinel/feed_state.json" \
+  --bootstrap --dry-run | head -40
+```
 
 ```bash
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.hivesec.sentinel-feed-refresh.plist 2>/dev/null || true

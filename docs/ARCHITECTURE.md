@@ -35,9 +35,17 @@ know what `X-HiveSec-Token` is. Verified with the live Keychain token.
 Consequences, until an Access **Service Auth** application exists for that path:
 
 - `refresh-kev` cannot deliver to the site. Telegram still works.
-- `record_published` is never reached for a batch that fails, so nothing is
-  marked seen and the same alerts are retried on the next run — the intended
-  at-least-once behaviour, not a fault.
+- Since 2026-09-13, an alert accepted by Telegram is recorded as seen even
+  though the site channel rejected it (`--record-on`, default `telegram`), so
+  the public bot does not repeat itself every six hours. Before that change
+  nothing was marked seen and the whole batch was re-sent on every run — that
+  was described as at-least-once delivery, but against a permanently failing
+  channel it was an unbounded repeat.
+- The consequence is deliberate: while the intake is blocked, alerts recorded
+  this way are **not** delivered to the site and will not be retried there. The
+  site feed is not affected, because the Worker cron collects the same entries
+  independently. If the site channel is ever the exclusive one again, run with
+  `--record-on all`.
 - The KV feed stays current anyway, from the Worker cron.
 
 See `bash-website/CUTOVER_ACCESS_LOGIN_20260909.md` §T.

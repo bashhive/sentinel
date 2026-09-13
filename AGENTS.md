@@ -12,4 +12,12 @@
   credential testing, scanner outbox ingestion, or personal monitoring.
 - Active documentation and operator output use English. Historical material
   belongs under `archive/<classification>/<date>/`.
-- Use `.venv/bin/python -m pytest` as the test gate.
+- A delivered alert is never delivered twice: record it as seen per alert and
+  per channel, as soon as the channel named by `--record-on` accepts it. Never
+  make that decision per batch again.
+- Never swallow a delivery failure silently. `Publisher._request` may contain
+  the exception and return `False`, but it must log the channel, host and real
+  status or exception type first.
+- Use `.venv/bin/python -m pytest` as the test gate. The virtualenv is
+  uv-managed and ships neither pip nor pytest, so run `uv sync --extra dev`
+  first (or `uv run --extra dev pytest -q`).

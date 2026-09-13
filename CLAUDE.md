@@ -39,8 +39,12 @@ The repo venv at `.venv` is the canonical interpreter (the LaunchAgent wrapper d
 `AGENTS.md` names `.venv/bin/python -m pytest` as the test gate.
 
 ```bash
-# one-time setup
-python3.11 -m venv .venv && .venv/bin/python -m pip install -e '.[dev]'
+# one-time setup. The existing .venv was created by uv (Python 3.13) and has
+# neither pip nor pytest in it, so `.venv/bin/python -m pytest` fails and
+# `python -m pip` answers "No module named pip". Populate it with uv:
+uv sync --extra dev            # or: uv run --extra dev pytest -q, to touch nothing
+# Only if you rebuild the venv with stdlib venv instead of uv:
+#   python3.11 -m venv .venv && .venv/bin/python -m pip install -e '.[dev]'
 
 # test gate (required before reporting completion)
 .venv/bin/python -m pytest -q
@@ -55,12 +59,25 @@ python3.11 -m venv .venv && .venv/bin/python -m pip install -e '.[dev]'
 .venv/bin/hivesec-sentinel refresh-kev --state /tmp/state.json --lookback-days 7 --dry-run
 ```
 
+`refresh-kev` flags beyond `--state` / `--lookback-days` / `--dry-run`:
+
+- `--record-on {telegram,all}` (default `telegram`) — which channel's acceptance
+  marks an alert as seen. The default exists because the site channel is
+  blocked: with `all`, a 302 there means nothing is ever recorded and Telegram
+  re-sends the same alerts every run.
+- `--max-batch N` (default 25, 0 = unlimited) — bounds one run; the rest is left
+  for the next and reported as `withheld_for_next_run`.
+- `--bootstrap` — first run only: ignore the lookback and publish the whole
+  catalogue. Without it a missing state file behaves like any other run.
+
 `refresh-kev` defaults to `--state data/feed_state.json` (`data/` is gitignored) and
 `--lookback-days 7` (accepted range 1–30). It exits 1 whenever KEV source health is not `ok`,
 even with `--dry-run`, so a failed fetch looks like a failed run.
 
-There is no `requirements.txt`; CI (`.gitlab-ci.yml`, python:3.12 image) does `pip install -e .`
-(no `[dev]` extras) then `pytest -q`.
+There is no `requirements.txt`; CI (`.gitlab-ci.yml`, python:3.12 image) installs `.[dev]` and
+runs `ruff check src tests` and `pytest -q` as separate jobs. Until 2026-09-13 it installed
+without the extras, so pytest was absent, the `|| unittest discover` fallback collected nothing
+from this pytest-style suite, and the pipeline was green with zero tests.
 
 ## Required environment
 
@@ -102,7 +119,13 @@ Module responsibilities:
 
 - `profile.py` — validates the execution-profile env contract into a frozen `PublicBrandContext`.
   This is the gate that makes every run explicit and attributable.
-- `publisher.py` — `PublicAlert` is the versioned public contract (`schema_version` 1, exactly the
+- `publisher.py` — `publish()` returns a single bool and is implemented on
+  `publish_detailed()`, which returns the per-channel outcome
+  (`{"telegram": bool, "<site channel>": bool}`); the CLI uses the detailed form so a
+  channel that accepted an alert is never re-sent because another failed. `_request` contains
+  every transport failure into `False` **and logs it** (channel, host, real status or exception
+  type) — do not go back to a bare `except: return False`, that blindness is what let the site
+  channel stay dead for days. `PublicAlert` is the versioned public contract (`schema_version` 1, exactly the
   seven fields in `_ALERT_FIELDS`, `source` must equal `"HiveSec Sentinel"`, severity in
   info/warning/critical, message ≤ 3500 chars). `from_dict` rejects **any** extra field, not just
   the `_PRIVATE_FIELDS` list — adding a field to the contract requires bumping `schema_version` and
@@ -114,19 +137,24 @@ Module responsibilities:
   land there too.
 - `feeds.py` — KEV collection and the delivery-state file (`schema_version: 1`, `seen_ids`,
   `source_health`). `refresh_kev` only *reads* `seen_ids` and writes health; IDs are added to
-  `seen_ids` by `record_published`, which the CLI calls **only after every alert in the batch was
-  accepted by both channels**. This is the duplicate-suppression invariant — keep it. On a
-  brand-new state file the lookback is ignored (`since = date.min`) so the first run publishes the
-  whole catalog; the runbook expects a manual review of that first batch.
-- `receipts.py` — writes one bounded JSON receipt per channel to
+  `seen_ids` by `record_published`, which the CLI now calls **per alert**, as soon as the channel
+  named by `--record-on` (default `telegram`) accepted it. This is the duplicate-suppression
+  invariant — an alert already delivered must never be delivered again, and batching that decision
+  is what produced a six-hourly repeat on the public bot while the site intake was 302-blocked.
+  `refresh_kev(bootstrap=...)` controls a brand-new state file: the function still defaults to
+  `True` (ignore the lookback, publish the whole catalog) but the CLI passes `False` unless
+  `--bootstrap` is given, so the runbook's "delete the state file" step is no longer a flood.
+- `receipts.py` — writes one bounded JSON receipt per **accepted** channel (the CLI passes the
+  real channel names; the default is the generic `("telegram", "site")` so a receipt never claims
+  a channel that was not used) to
   `~/Library/Application Support/HiveSec Sentinel/publication_receipts/` (0700 dir, 0600 files,
   atomic rename). Receipts deliberately contain the payload SHA-256 and profile metadata but
   **not** the alert title/message; tests assert this.
 - `cli.py` — `publish <file>` (single alert; never touches the state file) and `refresh-kev`
-  (batch). Publication of a batch stops at the first failure and returns 1 without recording
-  anything as seen. Consequence: alerts delivered earlier in that same batch already have
-  receipts but are **not** in `seen_ids`, so the next run re-sends them. This is the accepted
-  trade-off (at-least-once delivery); don't "fix" it by recording per-alert without discussion.
+  (batch). A batch still stops at the first failure and returns 1, but each alert is recorded and
+  receipted as it goes, so work already delivered survives the failure. `--max-batch` (default 25)
+  bounds one run. Logging is configured to stderr here, which is what routes the publisher's
+  delivery lines into the LaunchAgent error log.
 
 Network is injected for testability: `feeds.fetch_json`/`refresh_kev` take an `opener` callable
 (tests pass a lambda returning a fake response object), and `write_publication_receipts` takes a

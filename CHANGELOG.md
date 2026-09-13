@@ -10,6 +10,74 @@ both.
 
 ---
 
+## 2026-09-13 — Delivery is recorded per channel, and failures are visible
+
+### Fixed
+
+- **The public bot no longer repeats itself.** `Publisher.publish` required
+  *both* channels to succeed, and `record_published` ran only after the whole
+  batch had been published. With the site intake answering 302 behind Cloudflare
+  Access, every run delivered the same alerts to `@hivesecsentinelbot` and then
+  recorded nothing as seen — so the next run sent them again, every six hours.
+  Delivery is now tracked per alert and per channel: an alert accepted by the
+  channel named in `--record-on` (default `telegram`) is marked seen even if
+  another channel rejected it. `--record-on all` restores the old
+  all-channels-or-nothing behaviour.
+- **Delivery failures are logged.** `Publisher._request` swallowed every
+  `HTTPError`, `URLError`, `TimeoutError` and `OSError` into a bare `False`, so a
+  302 from Access, a 401 from a revoked token and a DNS failure were
+  indistinguishable — which is how the site channel stayed dead for days without
+  an alarm. Each attempt now logs channel, host and the real status or exception,
+  and the CLI configures logging to stderr so the lines land in
+  `~/Library/Logs/HiveSecSentinel/feed-refresh-error.log`. The function still
+  contains the failure and returns `False`; nothing raises.
+- **Receipts name the channel that actually accepted the alert.** The default
+  was the literal tuple `("telegram", "github")`, and the CLI never overrode it,
+  so every alert delivered through the Worker intake was filed as a `github`
+  publication. Receipts are the audit evidence for public publication; they were
+  wrong.
+- **Deleting the state file no longer floods Telegram.** A missing state file set
+  `since = date.min`, so the documented recovery step in `docs/OPERATIONS.md`
+  would publish the entire KEV catalogue (~1 300 entries) one message at a time.
+  The CLI now applies the normal lookback unless `--bootstrap` is passed.
+
+### Added
+
+- `Publisher.publish_detailed(alert)` returning `{"telegram": bool,
+  "<site channel>": bool}`. `publish()` keeps its signature and returns
+  `all(...)`, so existing callers are unaffected.
+- `refresh-kev --max-batch N` (default 25) bounds a single run; the remainder is
+  left for the next one and reported as `withheld_for_next_run` in the dry-run
+  output.
+- `refresh-kev --bootstrap` and `--record-on {telegram,all}`.
+- `feeds.refresh_kev(..., bootstrap=...)` plus a test that a new state file
+  applies the lookback.
+
+### Changed
+
+- CI (`.gitlab-ci.yml`) installs `.[dev]` and runs `ruff check` and `pytest -q`
+  as separate failing jobs. It previously installed without the dev extras, so
+  `python -m pytest` was missing, the `|| python -m unittest discover` fallback
+  collected zero tests from a pytest-style suite, and the pipeline passed green
+  with nothing tested. Pip cache moved inside the project directory.
+
+### Verified on 2026-09-13
+
+- Full suite: **15 passed** (run with an external 3.14 interpreter — the repo
+  `.venv` is uv-managed and has neither pip nor pytest installed, the same gap
+  the CI job had; `uv sync --extra dev` fixes it).
+- `refresh-kev --dry-run` against the live catalogue with a scratch state file:
+  `health ok`, **14 eligible alerts**, `withheld 0`. Those 14 are what the next
+  scheduled run will deliver — and, this time, record.
+
+### Known state
+
+- Unchanged: the site channel still answers 302 and the Worker cron is still the
+  primary KEV collector. What changed is that a blocked site channel now costs
+  one failed delivery per alert instead of an unbounded repeat on Telegram.
+
+---
+
 ## 2026-09-13 — Documentation caught up with a pipeline that had moved
 
 ### Changed
