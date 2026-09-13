@@ -6,6 +6,7 @@ import json
 import logging
 import re
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -13,6 +14,8 @@ logger = logging.getLogger("hivesec_sentinel.publisher")
 
 _SECRET = re.compile(r"\b(?:github_pat_|ghp_|sk-|xai-)[A-Za-z0-9_-]{16,}\b")
 _SEVERITIES = {"info", "warning", "critical"}
+_SAFE_ID = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
+_ISO_TZ = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$", re.IGNORECASE)
 _ALERT_FIELDS = {
     "schema_version", "id", "title", "message", "severity", "source",
     "published_at",
@@ -39,22 +42,26 @@ class PublicAlert:
             raise TypeError("public alert must be an object")
         if set(value) != _ALERT_FIELDS or set(value) & _PRIVATE_FIELDS:
             raise ValueError("public alert must be an object without private identity")
-        required = (
-            "schema_version",
-            "id",
-            "title",
-            "message",
-            "severity",
-            "source",
-            "published_at",
-        )
-        if any(not isinstance(value.get(key), str) for key in required[1:]):
-            raise ValueError("public alert has missing or invalid fields")
-        if value.get("schema_version") != 1 or value["source"] != "HiveSec Sentinel":
+        if value.get("schema_version") != 1 or isinstance(value.get("schema_version"), bool):
             raise ValueError("unsupported public alert contract")
-        if value["severity"] not in _SEVERITIES or len(value["message"]) > 3500:
-            raise ValueError("invalid public alert content")
-        return cls(**{key: value[key] for key in required})
+        if any(not isinstance(value.get(key), str) for key in _ALERT_FIELDS - {"schema_version"}):
+            raise ValueError("public alert has missing or invalid fields")
+        if not value["id"].startswith("hivesec-") or not _SAFE_ID.fullmatch(value["id"]):
+            raise ValueError("invalid public alert ID")
+        if value["severity"] not in _SEVERITIES:
+            raise ValueError("invalid public alert severity")
+        source = _clean_text(value["source"], maximum=80)
+        if source != "HiveSec Sentinel":
+            raise ValueError("unsupported public alert contract")
+        return cls(
+            schema_version=1,
+            id=value["id"],
+            title=_clean_text(value["title"], maximum=160),
+            message=_clean_text(value["message"], maximum=6000),
+            severity=value["severity"],
+            source=source,
+            published_at=_normalise_published_at(value["published_at"]),
+        )
 
     def payload(self) -> dict[str, object]:
         return asdict(self)
@@ -64,6 +71,26 @@ def sanitize(text: str, *, maximum: int = 3500) -> str:
     return _SECRET.sub("[REDACTED]", "".join(c for c in text if c >= " " or c in "\n\t")).strip()[
         :maximum
     ]
+
+
+def _clean_text(value: str, *, maximum: int) -> str:
+    cleaned = "".join(char for char in value.strip() if char >= " " or char in "\n\t")
+    if not cleaned:
+        raise ValueError("public alert text cannot be empty")
+    return cleaned[:maximum]
+
+
+def _normalise_published_at(value: str) -> str:
+    timestamp = _clean_text(value, maximum=40)
+    if not _ISO_TZ.search(timestamp):
+        raise ValueError("public alert timestamp must include a timezone")
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+    except ValueError as error:
+        raise ValueError("invalid public alert timestamp") from error
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("public alert timestamp must include a timezone")
+    return parsed.astimezone(UTC).replace(microsecond=0).isoformat()
 
 
 class Publisher:
@@ -77,10 +104,9 @@ class Publisher:
       exists, with a Cloudflare Access *service token* (``CF-Access-Client-Id`` /
       ``CF-Access-Client-Secret``). The Worker validates the same contract and
       writes the public feed to KV.
-    * **GitHub dispatch** (legacy): ``repository_dispatch`` ``security-alert`` at
-      ``repository``; a GitHub Actions workflow validates and commits the feed.
-
-    Configure exactly one. When both are configured the Worker intake wins.
+    Site delivery is disabled for the scheduled job by default because the
+    Worker cron owns routine site collection. When an operator enables it, the
+    only supported site channel is the authenticated Worker intake.
     """
 
     def __init__(
@@ -89,12 +115,11 @@ class Publisher:
         telegram_token: str,
         telegram_chat_id: str,
         user_agent: str,
-        github_token: str = "",
-        repository: str = "",
         intake_url: str = "",
         intake_token: str = "",
         intake_client_id: str = "",
         intake_client_secret: str = "",
+        site_delivery: bool = True,
         opener=urlopen,
     ) -> None:
         if not all((telegram_token.strip(), telegram_chat_id.strip())):
@@ -110,8 +135,10 @@ class Publisher:
         self.intake_token = intake_token.strip()
         self.intake_client_id = intake_client_id.strip()
         self.intake_client_secret = intake_client_secret.strip()
-        self.github_token, self.repository = github_token.strip(), repository.strip()
+        self.site_delivery = site_delivery
 
+        if not self.site_delivery:
+            return
         if self.intake_url:
             if not self.intake_url.startswith("https://"):
                 raise ValueError("intake_url must be https")
@@ -119,30 +146,30 @@ class Publisher:
             has_service_token = bool(self.intake_client_id and self.intake_client_secret)
             if not (has_token or has_service_token):
                 raise ValueError("HiveSec intake credentials are incomplete")
-        elif self.github_token:
-            owner, slash, name = self.repository.partition("/")
-            if not slash or not owner or not name or "/" in name:
-                raise ValueError("repository must use owner/name format")
         else:
-            raise ValueError("HiveSec delivery credentials are incomplete")
+            raise ValueError("HiveSec Worker intake URL is required when site delivery is enabled")
 
     @classmethod
     def from_env(cls, environ, *, user_agent: str) -> Publisher:
+        delivery = environ.get("HIVESEC_SITE_DELIVERY", "disabled").strip().lower()
+        if delivery not in {"enabled", "disabled"}:
+            raise ValueError("HIVESEC_SITE_DELIVERY must be enabled or disabled")
         return cls(
             telegram_token=environ.get("HIVESEC_TELEGRAM_BOT_TOKEN", ""),
             telegram_chat_id=environ.get("HIVESEC_TELEGRAM_CHAT_ID", ""),
-            github_token=environ.get("HIVESEC_GITHUB_TOKEN", ""),
-            repository=environ.get("HIVESEC_GITHUB_REPOSITORY", "bashhive/bash-website"),
             intake_url=environ.get("HIVESEC_INTAKE_URL", ""),
             intake_token=environ.get("HIVESEC_INTAKE_TOKEN", ""),
             intake_client_id=environ.get("HIVESEC_CF_CLIENT_ID", ""),
             intake_client_secret=environ.get("HIVESEC_CF_CLIENT_SECRET", ""),
+            site_delivery=delivery == "enabled",
             user_agent=user_agent,
         )
 
     @property
-    def site_channel(self) -> str:
-        return "worker" if self.intake_url else "github"
+    def site_channel(self) -> str | None:
+        if not self.site_delivery:
+            return None
+        return "worker"
 
     def publish(self, alert: PublicAlert) -> bool:
         """Deliver to every configured channel; True only if all accepted."""
@@ -162,13 +189,13 @@ class Publisher:
                 "message": sanitize(alert.message),
             }
         )
-        return {
-            "telegram": self._telegram(alert),
-            self.site_channel: self._site(alert),
-        }
+        outcomes = {"telegram": self._telegram(alert)}
+        if self.site_delivery:
+            outcomes[self.site_channel or "site"] = self._site(alert)
+        return outcomes
 
     def _site(self, alert: PublicAlert) -> bool:
-        return self._worker(alert) if self.intake_url else self._github(alert)
+        return self._worker(alert)
 
     def _worker(self, alert: PublicAlert) -> bool:
         # Shared secret (current) or Cloudflare Access service token (dormant).
@@ -205,22 +232,6 @@ class Publisher:
             method="POST",
         )
         return self._request(request, expected=200, channel="telegram")
-
-    def _github(self, alert: PublicAlert) -> bool:
-        request = Request(
-            f"https://api.github.com/repos/{self.repository}/dispatches",
-            data=json.dumps(
-                {"event_type": "security-alert", "client_payload": alert.payload()}
-            ).encode(),
-            headers={
-                "Accept": "application/vnd.github+json",
-                "Authorization": f"Bearer {self.github_token}",
-                "Content-Type": "application/json",
-                "User-Agent": self.user_agent,
-            },
-            method="POST",
-        )
-        return self._request(request, expected=204, channel="github")
 
     def _request(self, request: Request, *, expected: int, channel: str = "") -> bool:
         """Perform one delivery call.

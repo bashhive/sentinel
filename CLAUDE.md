@@ -17,9 +17,9 @@ feed alive; the 6-hourly LaunchAgent froze the feed whenever the Mac slept, whic
 collector moved. What this repository still owns exclusively is **Telegram** delivery and any
 alert that does not come from KEV.
 
-**The site channel is currently blocked.** Cloudflare Access fronts every path of all six BashHive
-hostnames, so `POST /api/sentinel/alert` answers 302 — the edge does not know `X-HiveSec-Token`.
-Measured with the live Keychain token on 13 Sep 2026. Telegram is unaffected. See
+**The optional site channel is currently blocked.** Cloudflare Access fronts every path of all six BashHive
+hostnames, so `POST /api/sentinel/alert` answers 302 until a dedicated Service Auth application
+exists. The scheduled wrapper defaults to Telegram-only and does not read site credentials. See
 `docs/ARCHITECTURE.md` and `bash-website/CUTOVER_ACCESS_LOGIN_20260909.md` §T.
 
 `AGENTS.md` holds the binding repository rules and is imported here verbatim:
@@ -90,8 +90,8 @@ subcommand logic, so every invocation — including `--dry-run` — fails unless
 - `SENTINEL_USER_AGENT` optional (defaults to `HiveSec-Sentinel/1.0 (+https://hivesec.eu)`)
 - `SENTINEL_SOURCE_REVISION` optional; if set it is copied into each receipt as `source_revision`
 
-Live publishing additionally needs `HIVESEC_TELEGRAM_BOT_TOKEN`, `HIVESEC_TELEGRAM_CHAT_ID` and ONE
-site channel (`Publisher.from_env` picks it; `__init__` raises if neither is complete):
+Live publishing needs `HIVESEC_TELEGRAM_BOT_TOKEN` and `HIVESEC_TELEGRAM_CHAT_ID`. Site delivery is
+disabled by default. An operator may set `HIVESEC_SITE_DELIVERY=enabled` only with the Worker intake:
 
 - **Worker intake, shared secret** (what the live job uses): `HIVESEC_INTAKE_URL` (wrapper
   default `https://hivesec.eu/api/sentinel/alert`) and `HIVESEC_INTAKE_TOKEN`, Keychain item
@@ -101,18 +101,12 @@ site channel (`Publisher.from_env` picks it; `__init__` raises if neither is com
   Keychain items `com.hivesec.sentinel.cf-client-id` / `.cf-client-secret`. **Not configured on
   this machine** (checked 13 Sep 2026) — and it is what an Access Service Auth application would
   need, so this is the channel to restore rather than the shared secret.
-- **GitHub dispatch** (legacy, effectively dead): `HIVESEC_GITHUB_TOKEN`, optionally
-  `HIVESEC_GITHUB_REPOSITORY` (default `bashhive/bash-website`). Expected response: HTTP 204. It
-  reached the old GitHub Pages feed, which no longer serves anything. **Treat a fallback to
-  GitHub as an outage, not as redundancy.**
-
-The wrapper picks the first channel whose Keychain items exist, in that order. Both the shared
-secret and the GitHub token are present on this machine; the Access pair is not.
+GitHub dispatch was removed: it reached GitHub Pages, which no longer serves the sites.
 
 ## Architecture
 
 Data flow: `feeds.refresh_kev` → list of alert dicts → `publisher.alert_from_input` (strict
-`PublicAlert` contract) → `Publisher.publish` (Telegram **then** the site channel) →
+`PublicAlert` contract) → `Publisher.publish` (Telegram, then optional Worker intake) →
 `receipts.write_publication_receipts` → `feeds.record_published` (marks IDs as seen).
 
 Module responsibilities:
@@ -121,20 +115,17 @@ Module responsibilities:
   This is the gate that makes every run explicit and attributable.
 - `publisher.py` — `publish()` returns a single bool and is implemented on
   `publish_detailed()`, which returns the per-channel outcome
-  (`{"telegram": bool, "<site channel>": bool}`); the CLI uses the detailed form so a
+  (`{"telegram": bool, "worker": bool}` when enabled); the CLI uses the detailed form so a
   channel that accepted an alert is never re-sent because another failed. `_request` contains
   every transport failure into `False` **and logs it** (channel, host, real status or exception
   type) — do not go back to a bare `except: return False`, that blindness is what let the site
   channel stay dead for days. `PublicAlert` is the versioned public contract (`schema_version` 1, exactly the
   seven fields in `_ALERT_FIELDS`, `source` must equal `"HiveSec Sentinel"`, severity in
-  info/warning/critical, message ≤ 3500 chars). `from_dict` rejects **any** extra field, not just
+  info/warning/critical, message ≤ 6000 chars). `from_dict` rejects **any** extra field, not just
   the `_PRIVATE_FIELDS` list — adding a field to the contract requires bumping `schema_version` and
   updating the BASH site receiver. `sanitize()` strips control chars and redacts token-shaped
   strings before delivery (title capped at 120 chars). `Publisher._request` swallows all network
-  errors into `False`. The GitHub call is `repository_dispatch` with `event_type: security-alert`
-  and the alert payload as `client_payload`; the receiving site repo is `bashhive/bash-website`
-  (local checkout `/Users/raf/Code/BASH_site/public_html` per README), so contract changes must
-  land there too.
+  errors into `False`.
 - `feeds.py` — KEV collection and the delivery-state file (`schema_version: 1`, `seen_ids`,
   `source_health`). `refresh_kev` only *reads* `seen_ids` and writes health; IDs are added to
   `seen_ids` by `record_published`, which the CLI now calls **per alert**, as soon as the channel
@@ -165,8 +156,8 @@ and asserts the request shape — never make live calls from tests.
 
 - `scripts/refresh_public_feed.sh` (zsh) is what launchd runs: exports the SENTINEL_* env with
   `${VAR:-default}` fallbacks, verifies `.venv/bin/hivesec-sentinel` exists (and pip-installs
-  `.[dev]` into the venv if it is missing), pulls the three secrets from Keychain
-  (`com.hivesec.sentinel.telegram`, `.telegram-chat-id`, `.github`), then execs
+  `.[dev]` into the venv if it is missing), pulls Telegram credentials from Keychain and only
+  reads Worker intake credentials when site delivery was explicitly enabled, then execs
   `refresh-kev --state "~/Library/Application Support/HiveSec Sentinel/feed_state.json"
   --lookback-days "${SENTINEL_LOOKBACK_DAYS:-7}"`.
 - `config/launchd/com.hivesec.sentinel-feed-refresh.plist` — 21600 s interval, `RunAtLoad`; logs to

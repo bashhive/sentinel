@@ -109,6 +109,9 @@ def kev_alerts(
                 "published_at": f"{date_added}T00:00:00+00:00",
             }
         )
+    # Match the Worker collector: merging this sequence places the newest
+    # entry at the head of the bounded feed, regardless of CISA source order.
+    alerts.sort(key=lambda alert: str(alert["published_at"]))
     return alerts
 
 

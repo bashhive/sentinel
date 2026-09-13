@@ -6,7 +6,8 @@ Provide the public BashHive cybersecurity-alert identity and the code used by th
 
 ## Responsibilities
 
-- Publish general, verified cybersecurity alerts to the BASH sites and Telegram handle.
+- Publish general, verified cybersecurity alerts to Telegram and, when explicitly
+  enabled, to the authenticated Worker intake.
 - Validate the versioned public-alert contract and reject private identities.
 - Keep public delivery credentials isolated from Butler and the scanner.
 

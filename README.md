@@ -13,12 +13,14 @@ This repository contains the public publication code and contract for the BASH s
 - Public site receiver: the `bash-site` Cloudflare Worker (`/Users/raf/Code/bash-website`),
   endpoint `POST https://hivesec.eu/api/sentinel/alert`
 
-`hivesec-sentinel publish ALERT.json` validates that an alert is public, sends it through
-`@hivesecsentinelbot`, and posts it to the site feed.
+`hivesec-sentinel publish ALERT.json` validates an alert and sends it through
+`@hivesecsentinelbot`. An operator may additionally enable the authenticated
+Worker intake for curated non-KEV alerts.
 
 > **Since 10 September 2026 this repository is not what keeps the public feed current.** The
 > Worker collects CISA KEV itself every 10 minutes; this agent is redundant for the site and
-> exclusive only for Telegram. Its site channel is currently blocked by Cloudflare Access (302).
+> exclusive only for Telegram. The scheduled wrapper therefore defaults to
+> `HIVESEC_SITE_DELIVERY=disabled` and does not attempt the Access-blocked site intake.
 > See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [CHANGELOG.md](CHANGELOG.md). Credentials come only from
 the `HIVESEC_*` environment at runtime and must never be stored in this repository.
 

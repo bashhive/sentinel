@@ -26,7 +26,7 @@ no longer freezes when this machine sleeps — which is what the 6-hourly
 LaunchAgent did. This repository remains the only publisher to **Telegram**, and
 the only path for an alert that does not come from KEV.
 
-## Current state — the intake is blocked
+## Current state — Telegram-only local delivery
 
 Cloudflare Access fronts every path of all six BashHive hostnames (13 Sep 2026).
 `POST /api/sentinel/alert` answers **302** to the login page: the edge does not
@@ -34,18 +34,11 @@ know what `X-HiveSec-Token` is. Verified with the live Keychain token.
 
 Consequences, until an Access **Service Auth** application exists for that path:
 
-- `refresh-kev` cannot deliver to the site. Telegram still works.
-- Since 2026-09-13, an alert accepted by Telegram is recorded as seen even
-  though the site channel rejected it (`--record-on`, default `telegram`), so
-  the public bot does not repeat itself every six hours. Before that change
-  nothing was marked seen and the whole batch was re-sent on every run — that
-  was described as at-least-once delivery, but against a permanently failing
-  channel it was an unbounded repeat.
-- The consequence is deliberate: while the intake is blocked, alerts recorded
-  this way are **not** delivered to the site and will not be retried there. The
-  site feed is not affected, because the Worker cron collects the same entries
-  independently. If the site channel is ever the exclusive one again, run with
-  `--record-on all`.
+- The scheduled wrapper uses `HIVESEC_SITE_DELIVERY=disabled`, so it sends only
+  to Telegram and does not read site-delivery credentials.
+- The Worker cron remains the sole routine site collector. Re-enable site
+  delivery only after a dedicated Service Auth application is configured for
+  the exact intake path; GitHub dispatch is not a fallback.
 - The KV feed stays current anyway, from the Worker cron.
 
 See `bash-website/CUTOVER_ACCESS_LOGIN_20260909.md` §T.

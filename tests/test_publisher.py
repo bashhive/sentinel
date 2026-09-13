@@ -39,6 +39,30 @@ def test_public_contract_and_secret_redaction() -> None:
     assert sanitize("token github_pat_abcdefghijklmnopqrstuvwxyz") == "token [REDACTED]"
 
 
+def test_public_contract_matches_worker_bounds_and_normalisation() -> None:
+    value = alert() | {
+        "id": "hivesec-CVE_2026.1",
+        "title": "  title\x00 ",
+        "message": "message\x00",
+        "published_at": "2026-07-23T13:00:00+01:00",
+    }
+    parsed = alert_from_input(value)
+    assert parsed.title == "title"
+    assert parsed.message == "message"
+    assert parsed.published_at == "2026-07-23T12:00:00+00:00"
+    for invalid in (
+        alert() | {"id": "not-hivesec"},
+        alert() | {"published_at": "2026-07-23T12:00:00"},
+        alert() | {"title": " "},
+    ):
+        try:
+            alert_from_input(invalid)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Worker-invalid public alert was accepted")
+
+
 class _Response:
     def __init__(self, status: int) -> None:
         self.status = status
@@ -101,24 +125,22 @@ def test_worker_intake_failure_is_reported_not_raised() -> None:
     assert publisher.publish(alert_from_input(alert())) is False
 
 
-def test_worker_intake_wins_over_github_and_requires_https_and_full_token() -> None:
+def test_worker_intake_requires_https_and_full_credentials() -> None:
     from hivesec_sentinel.publisher import Publisher
 
     env = {
         "HIVESEC_TELEGRAM_BOT_TOKEN": "t",
         "HIVESEC_TELEGRAM_CHAT_ID": "c",
-        "HIVESEC_GITHUB_TOKEN": "gh",
+        "HIVESEC_SITE_DELIVERY": "enabled",
         "HIVESEC_INTAKE_URL": "https://hivesec.eu/api/sentinel/alert",
         "HIVESEC_CF_CLIENT_ID": "id",
         "HIVESEC_CF_CLIENT_SECRET": "secret",
     }
     assert Publisher.from_env(env, user_agent="ua").site_channel == "worker"
-    legacy = {k: v for k, v in env.items() if not k.startswith(("HIVESEC_INTAKE", "HIVESEC_CF"))}
-    assert Publisher.from_env(legacy, user_agent="ua").site_channel == "github"
     for broken in (
         env | {"HIVESEC_INTAKE_URL": "http://hivesec.eu/api/sentinel/alert"},
         env | {"HIVESEC_CF_CLIENT_SECRET": ""},
-        {k: v for k, v in legacy.items() if k != "HIVESEC_GITHUB_TOKEN"},
+        {k: v for k, v in env.items() if not k.startswith(("HIVESEC_INTAKE", "HIVESEC_CF"))},
     ):
         try:
             Publisher.from_env(broken, user_agent="ua")
@@ -153,6 +175,7 @@ def test_shared_secret_wins_over_service_token_and_is_required() -> None:
     env = {
         "HIVESEC_TELEGRAM_BOT_TOKEN": "t",
         "HIVESEC_TELEGRAM_CHAT_ID": "c",
+        "HIVESEC_SITE_DELIVERY": "enabled",
         "HIVESEC_INTAKE_URL": "https://hivesec.eu/api/sentinel/alert",
         "HIVESEC_INTAKE_TOKEN": "shared",
         "HIVESEC_CF_CLIENT_ID": "id",
@@ -174,3 +197,21 @@ def test_shared_secret_wins_over_service_token_and_is_required() -> None:
         pass
     else:
         raise AssertionError("intake URL with no credentials was accepted")
+
+
+def test_telegram_only_mode_needs_no_site_credentials() -> None:
+    from hivesec_sentinel.publisher import Publisher
+
+    calls, opener = _capture(200)
+    publisher = Publisher.from_env(
+        {
+            "HIVESEC_TELEGRAM_BOT_TOKEN": "t",
+            "HIVESEC_TELEGRAM_CHAT_ID": "c",
+            "HIVESEC_SITE_DELIVERY": "disabled",
+        },
+        user_agent="ua",
+    )
+    publisher._opener = opener
+    assert publisher.site_channel is None
+    assert publisher.publish_detailed(alert_from_input(alert())) == {"telegram": True}
+    assert len(calls) == 1

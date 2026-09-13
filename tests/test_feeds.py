@@ -39,6 +39,19 @@ def test_kev_alerts_do_not_repeat_seen_or_old_entries() -> None:
     )
 
 
+def test_kev_alerts_are_oldest_first_like_worker_collector() -> None:
+    value = catalog()
+    value["vulnerabilities"] = [
+        value["vulnerabilities"][0] | {"cveID": "CVE-2026-2000", "dateAdded": "2026-07-25"},
+        value["vulnerabilities"][0],
+    ]
+    alerts = kev_alerts(value, since=date(2026, 7, 20), seen_ids=set())
+    assert [alert["id"] for alert in alerts] == [
+        "hivesec-kev-cve-2026-1000",
+        "hivesec-kev-cve-2026-2000",
+    ]
+
+
 def test_refresh_persists_source_health_and_seen_ids(tmp_path: Path) -> None:
     class Response:
         status = 200

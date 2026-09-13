@@ -25,9 +25,4 @@ migrate_secret \
   "HIVESEC_TELEGRAM_CHAT_ID" \
   "com.hivesec.sentinel.telegram-chat-id" \
   "hivesec-sentinel"
-migrate_secret \
-  "com.butler.hivesec.github" \
-  "com.hivesec.sentinel.github" \
-  "hivesec-sentinel"
-
 printf 'Sentinel Keychain namespace migration completed without printing secret values.\n'

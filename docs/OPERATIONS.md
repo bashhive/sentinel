@@ -12,9 +12,9 @@ every 10 minutes (`bash-website/src/kev.js`, a port of `feeds.kev_alerts`). This
 LaunchAgent is **redundant for the site** and exclusive only for Telegram.
 
 Its site channel is also currently blocked: Cloudflare Access fronts every path
-of the BashHive hostnames, so `POST /api/sentinel/alert` answers **302**.
-Nothing is lost — a batch that fails records nothing as seen and is retried —
-but nothing is delivered to the site either.
+of the BashHive hostnames, so `POST /api/sentinel/alert` answers **302**. The
+scheduled wrapper now defaults to `HIVESEC_SITE_DELIVERY=disabled`, publishing
+only to Telegram while the Worker cron remains the site collector.
 
 Check which half is working:
 
@@ -33,9 +33,8 @@ TOK=$(security find-generic-password -s com.hivesec.sentinel.intake-token -w) \
 To restore delivery to the site, create a Cloudflare Access **Service Auth**
 application for `api/sentinel/alert`, put its AUD in the Worker's `INTAKE_AUD`,
 and store the service token in `com.hivesec.sentinel.cf-client-id` /
-`.cf-client-secret`. The wrapper picks that channel up on the next run. The
-alternative is to accept the cron as the only collector and retire this agent —
-decide, rather than leaving a scheduled job that silently delivers nothing.
+`.cf-client-secret`, then explicitly set `HIVESEC_SITE_DELIVERY=enabled`.
+GitHub dispatch is retired and is not a delivery fallback.
 
 ## State and receipts
 

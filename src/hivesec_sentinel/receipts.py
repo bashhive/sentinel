@@ -1,7 +1,7 @@
 """Write bounded public-publication receipts for optional local projection.
 
 One receipt is written per channel that actually accepted the alert. Callers
-pass the real channel names (``telegram`` plus ``worker`` or ``github``); the
+pass the real channel names (``telegram`` plus optional ``worker``); the
 default is deliberately generic so a receipt never claims a channel that was
 not used.
 """

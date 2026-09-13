@@ -10,6 +10,23 @@ both.
 
 ---
 
+## 2026-09-14 — Canonical Worker feed alignment
+
+### Changed
+
+- The Sentinel validator now mirrors the Worker PublicAlert bounds, safe ID
+  checks and timestamp normalisation; the Python KEV collector sorts entries
+  oldest-first like the Worker collector.
+- The scheduled wrapper defaults to Telegram-only delivery and fails closed if
+  site delivery is explicitly enabled without Worker intake credentials.
+
+### Verified
+
+- `zsh -n scripts/refresh_public_feed.sh` and `18 passed` from the Sentinel
+  test suite.
+
+---
+
 ## 2026-09-13 — Delivery is recorded per channel, and failures are visible
 
 ### Fixed
