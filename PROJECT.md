@@ -18,9 +18,16 @@ Provide the public BashHive cybersecurity-alert identity and the code used by th
 
 ## Runtime ownership
 
-- Sentinel owns public delivery under `com.hivesec.sentinel.*`.
-- BASH site owns static rendering and `repository_dispatch` ingestion.
+- Sentinel owns public delivery under `com.hivesec.sentinel.*`, and is the sole
+  owner of Telegram delivery.
+- The `bash-site` Cloudflare Worker owns static rendering, the gate, the KV
+  feed, the authenticated `POST /api/sentinel/alert` intake, **and — since
+  10 Sep 2026 — the primary KEV collection**, on a 10-minute Cron Trigger. The
+  GitHub `repository_dispatch` path is retired.
 - Telegram owns the public `@hivesecsentinelbot` identity.
+
+Reviewed 13 September 2026. `docs/ARCHITECTURE.md` holds the current data flow
+and the reason this repository is no longer what keeps the public feed alive.
 
 ## Success criteria
 

@@ -7,7 +7,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 HiveSec Sentinel: the public cybersecurity-alert publisher for the BashHive brand. It is a small,
 dependency-free Python 3.11+ package (`src/hivesec_sentinel`, ~500 lines) plus a macOS LaunchAgent
 that polls the CISA KEV catalog every 6 hours and publishes new entries to Telegram
-(`@hivesecsentinelbot`) and the BASH site (GitHub `repository_dispatch`).
+(`@hivesecsentinelbot`) and the BashHive site.
+
+**Read this before assuming what runs where (13 Sep 2026).** The site feed is now collected
+*inside Cloudflare*: `bash-website/src/kev.js` runs on a Worker Cron Trigger every 10 minutes and
+is a port of `feeds.py:kev_alerts()` from this repo — same ids, same titles, same wording, so the
+two paths dedupe against each other. This machine is no longer the thing that keeps the public
+feed alive; the 6-hourly LaunchAgent froze the feed whenever the Mac slept, which is why the
+collector moved. What this repository still owns exclusively is **Telegram** delivery and any
+alert that does not come from KEV.
+
+**The site channel is currently blocked.** Cloudflare Access fronts every path of all six BashHive
+hostnames, so `POST /api/sentinel/alert` answers 302 — the edge does not know `X-HiveSec-Token`.
+Measured with the live Keychain token on 13 Sep 2026. Telegram is unaffected. See
+`docs/ARCHITECTURE.md` and `bash-website/CUTOVER_ACCESS_LOGIN_20260909.md` §T.
 
 `AGENTS.md` holds the binding repository rules and is imported here verbatim:
 
@@ -63,21 +76,26 @@ subcommand logic, so every invocation — including `--dry-run` — fails unless
 Live publishing additionally needs `HIVESEC_TELEGRAM_BOT_TOKEN`, `HIVESEC_TELEGRAM_CHAT_ID` and ONE
 site channel (`Publisher.from_env` picks it; `__init__` raises if neither is complete):
 
-- **Worker intake** (preferred since 9 Sep 2026): `HIVESEC_INTAKE_URL` (default in the wrapper:
-  `https://hivesec.eu/api/sentinel/alert`), `HIVESEC_CF_CLIENT_ID`, `HIVESEC_CF_CLIENT_SECRET` — a
-  Cloudflare Access *service token*, Keychain items `com.hivesec.sentinel.cf-client-id` /
-  `.cf-client-secret`. The `bash-site` Worker validates the same `PublicAlert` contract and writes
-  the public feed to KV. Expected response: HTTP 200.
-- **GitHub dispatch** (legacy): `HIVESEC_GITHUB_TOKEN`, optionally `HIVESEC_GITHUB_REPOSITORY`
-  (default `bashhive/bash-website`). Expected response: HTTP 204.
+- **Worker intake, shared secret** (what the live job uses): `HIVESEC_INTAKE_URL` (wrapper
+  default `https://hivesec.eu/api/sentinel/alert`) and `HIVESEC_INTAKE_TOKEN`, Keychain item
+  `com.hivesec.sentinel.intake-token`, sent as the `X-HiveSec-Token` header and compared by the
+  Worker against its `INTAKE_SECRET` as SHA-256 digests. Expected response: HTTP 200.
+- **Worker intake, Access service token**: `HIVESEC_CF_CLIENT_ID` / `HIVESEC_CF_CLIENT_SECRET`,
+  Keychain items `com.hivesec.sentinel.cf-client-id` / `.cf-client-secret`. **Not configured on
+  this machine** (checked 13 Sep 2026) — and it is what an Access Service Auth application would
+  need, so this is the channel to restore rather than the shared secret.
+- **GitHub dispatch** (legacy, effectively dead): `HIVESEC_GITHUB_TOKEN`, optionally
+  `HIVESEC_GITHUB_REPOSITORY` (default `bashhive/bash-website`). Expected response: HTTP 204. It
+  reached the old GitHub Pages feed, which no longer serves anything. **Treat a fallback to
+  GitHub as an outage, not as redundancy.**
 
-The wrapper script uses the Worker intake whenever both Keychain items exist and falls back to the
-GitHub token otherwise. See `bash-website/CUTOVER_ACCESS_LOGIN_20260909.md`.
+The wrapper picks the first channel whose Keychain items exist, in that order. Both the shared
+secret and the GitHub token are present on this machine; the Access pair is not.
 
 ## Architecture
 
 Data flow: `feeds.refresh_kev` → list of alert dicts → `publisher.alert_from_input` (strict
-`PublicAlert` contract) → `Publisher.publish` (Telegram **then** GitHub dispatch) →
+`PublicAlert` contract) → `Publisher.publish` (Telegram **then** the site channel) →
 `receipts.write_publication_receipts` → `feeds.record_published` (marks IDs as seen).
 
 Module responsibilities:

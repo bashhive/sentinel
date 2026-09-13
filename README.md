@@ -9,11 +9,17 @@ This repository contains the public publication code and contract for the BASH s
 - Bot: HiveSec Sentinel
 - Telegram: [@hivesecsentinelbot](https://t.me/hivesecsentinelbot)
 - Tagline: “AI security assistant for alerts, guidance and security topics.”
-- Runtime: this repository, invoked by the public-site deployment or an explicit operator job
-- Public site receiver: `/Users/raf/Code/BASH_site/public_html`
+- Runtime: this repository, invoked by a macOS LaunchAgent or an explicit operator job
+- Public site receiver: the `bash-site` Cloudflare Worker (`/Users/raf/Code/bash-website`),
+  endpoint `POST https://hivesec.eu/api/sentinel/alert`
 
 `hivesec-sentinel publish ALERT.json` validates that an alert is public, sends it through
-`@hivesecsentinelbot`, and dispatches it to the BASH site feed. Credentials come only from
+`@hivesecsentinelbot`, and posts it to the site feed.
+
+> **Since 10 September 2026 this repository is not what keeps the public feed current.** The
+> Worker collects CISA KEV itself every 10 minutes; this agent is redundant for the site and
+> exclusive only for Telegram. Its site channel is currently blocked by Cloudflare Access (302).
+> See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [CHANGELOG.md](CHANGELOG.md). Credentials come only from
 the `HIVESEC_*` environment at runtime and must never be stored in this repository.
 
 See [PROJECT.md](PROJECT.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
