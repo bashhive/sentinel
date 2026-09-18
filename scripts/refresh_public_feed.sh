@@ -39,8 +39,9 @@ if [[ -z "${HIVESEC_TELEGRAM_BOT_TOKEN:-}" || -z "${HIVESEC_TELEGRAM_CHAT_ID:-}"
   exit 1
 fi
 
-# Site channel, only when explicitly enabled. Preferred: the bash-site Worker intake, authenticated with a
-# Cloudflare Access service token stored in Keychain as
+# Site channel, only when explicitly enabled: the bash-site Worker intake. The code
+# tries the shared-secret intake token first (Keychain com.hivesec.sentinel.intake-token)
+# and falls back to a Cloudflare Access service token stored in Keychain as
 #   com.hivesec.sentinel.cf-client-id / com.hivesec.sentinel.cf-client-secret
 # GitHub repository_dispatch was retired with GitHub Pages and is not a fallback.
 if [[ "$HIVESEC_SITE_DELIVERY" == "enabled" ]]; then

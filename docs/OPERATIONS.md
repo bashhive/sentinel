@@ -113,5 +113,6 @@ launchctl kickstart -k gui/$(id -u)/com.hivesec.sentinel-feed-refresh
 
 ## Security
 
-Secrets are read from macOS Keychain and are never written to the repository. The
-wrapper fails before publication if any required Keychain item is missing.
+The Telegram token and chat id are sourced from the git-ignored repository `.env`
+(never committed); Worker intake secrets are read from Keychain only when site delivery
+is enabled. The wrapper fails before publication if a required value is missing.
