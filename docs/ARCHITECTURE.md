@@ -46,8 +46,9 @@ See `bash-website/CUTOVER_ACCESS_LOGIN_20260909.md` §T.
 ## Boundary
 
 - Sentinel is the only public-alert publisher.
-- Butler is a private assistant and never supplies personal context or
-  credentials here.
+- Adelaide reads only `.adelaide/report.json` (contract v1, /Users/raf/Code/adelaide/docs/REPO_REPORTS.md); this repo keeps ownership of its bot.
+  It supplies no personal context or credentials here, and the report carries
+  only public KEV facts and feed health (see "Adelaide report" below).
 - Data Breach Scanner events, victim identities and private outboxes are
   rejected.
 - The site accepts only alerts with `source=HiveSec Sentinel`.
@@ -65,6 +66,17 @@ See `bash-website/CUTOVER_ACCESS_LOGIN_20260909.md` §T.
   "published_at": "2026-07-23T10:00:00+00:00"
 }
 ```
+
+## Adelaide report
+
+`hivesec_sentinel.adelaide` writes `<repo>/.adelaide/report.json` after each
+non-dry-run `refresh-kev` (also when KEV health fails) and on demand with
+`hivesec-sentinel adelaide-report`. It is built from local state only —
+`feed_state.json`, the Telegram receipts and `adelaide_cache.json` (bounded:
+50 entries, 7 days, 0600) — and never touches the network. One `alert` item per
+alert delivered in the last 48 h (`urgent` when the KEV due date is under 7 days
+away) plus one `status` item for source health. The KEV `dueDate` is carried
+beside the alert, so the `PublicAlert` contract below is unchanged.
 
 Changing this contract means changing four places together: `publisher.py` here,
 `src/alerts.js` and `src/kev.js` in `bash-website`, and both test suites.

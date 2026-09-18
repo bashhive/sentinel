@@ -9,6 +9,7 @@ import os
 import sys
 from pathlib import Path
 
+from .adelaide import cache_path_for, remember_delivered, write_report
 from .feeds import record_published, refresh_kev
 from .profile import resolve_public_brand
 from .publisher import Publisher, alert_from_input
@@ -66,8 +67,20 @@ def main(argv: list[str] | None = None) -> int:
             "behaviour: record only when every configured channel accepted it."
         ),
     )
+    report = command.add_parser(
+        "adelaide-report",
+        help=(
+            "Write .adelaide/report.json from local state, receipts and cache only "
+            "(no network, nothing is sent)"
+        ),
+    )
+    report.add_argument("--state", type=Path, default=Path("data/feed_state.json"))
     args = parser.parse_args(argv)
     _configure_logging()
+    if args.command == "adelaide-report":
+        # Read-only over local state and never publishes, so it does not need
+        # the public_brand publishing profile.
+        return 0 if write_report(state_path=args.state) else 1
     try:
         public_context = resolve_public_brand(os.environ)
     except ValueError as error:
@@ -77,11 +90,13 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--lookback-days must be between 1 and 30")
         if args.max_batch < 0:
             parser.error("--max-batch must be 0 or greater")
+        due_dates: dict[str, str] = {}
         alerts, health = refresh_kev(
             state_path=args.state,
             user_agent=public_context.user_agent,
             lookback_days=args.lookback_days,
             bootstrap=args.bootstrap,
+            due_dates=due_dates,
         )
         withheld = 0
         if args.max_batch and len(alerts) > args.max_batch:
@@ -96,6 +111,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(output, ensure_ascii=False, indent=2))
             return 0 if health.status == "ok" else 1
         if health.status != "ok":
+            write_report(state_path=args.state)
             return 1
         if withheld:
             print(
@@ -116,6 +132,9 @@ def main(argv: list[str] | None = None) -> int:
                 # channel we record on is never re-sent because a later alert
                 # or another channel failed.
                 record_published(args.state, [value])
+                remember_delivered(
+                    cache_path_for(args.state), value, due_dates.get(alert.id)
+                )
             if not all(outcome.values()):
                 rejected = ", ".join(
                     channel for channel, ok in outcome.items() if not ok
@@ -127,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 failed = True
                 break
+        write_report(state_path=args.state)
         return 1 if failed else 0
     alert = alert_from_input(json.loads(args.input.read_text(encoding="utf-8")))
     if args.dry_run:

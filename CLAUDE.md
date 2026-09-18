@@ -29,7 +29,9 @@ exists. The scheduled wrapper defaults to Telegram-only and does not read site c
 In practice those rules mean: no code path may accept victim, watchlist, personal-contact,
 credential, or private-outbox data; no active scanning or personal monitoring (authoritative
 public feeds like CISA KEV are fine); credentials reach the process only as `HIVESEC_*` env vars
-read from the `com.hivesec.sentinel.*` Keychain namespace at runtime; and every live run needs the
+at runtime — the scheduled wrapper sources the Telegram bot token and chat id from the git-ignored
+repository `.env` (since commit 9c16c12) and reads the `com.hivesec.sentinel.*` Keychain namespace
+only for the optional Worker intake; and every live run needs the
 `public_brand` profile plus an attribution approval ref (see "Required environment").
 
 ## Commands
@@ -81,8 +83,9 @@ from this pytest-style suite, and the pipeline was green with zero tests.
 
 ## Required environment
 
-`cli.main` calls `profile.resolve_public_brand(os.environ)` right after argparse and before any
-subcommand logic, so every invocation — including `--dry-run` — fails unless:
+`cli.main` calls `profile.resolve_public_brand(os.environ)` right after argparse and before the
+publishing subcommands, so every `publish` / `refresh-kev` invocation — including `--dry-run` —
+fails unless (`adelaide-report` is exempt: it only reads local state and never publishes):
 
 - `SENTINEL_EXECUTION_PROFILE=public_brand`
 - `SENTINEL_POLICY_VERSION=execution-profiles-v1` (default if unset; any other value rejected)
@@ -156,24 +159,44 @@ and asserts the request shape — never make live calls from tests.
 
 - `scripts/refresh_public_feed.sh` (zsh) is what launchd runs: exports the SENTINEL_* env with
   `${VAR:-default}` fallbacks, verifies `.venv/bin/hivesec-sentinel` exists (and pip-installs
-  `.[dev]` into the venv if it is missing), pulls Telegram credentials from Keychain and only
-  reads Worker intake credentials when site delivery was explicitly enabled, then execs
+  `.[dev]` into the venv if it is missing), sources `/Users/raf/Code/sentinel/.env` with
+  `set -a` (this is where `HIVESEC_TELEGRAM_BOT_TOKEN` / `HIVESEC_TELEGRAM_CHAT_ID` come from since
+  commit 9c16c12; the wrapper exits 1 if either is missing, and any variable set in `.env`
+  overrides both the plist and the script defaults), reads Worker intake credentials from Keychain
+  only when site delivery was explicitly enabled (shared-secret intake token first, then the
+  Access service-token pair), then execs
   `refresh-kev --state "~/Library/Application Support/HiveSec Sentinel/feed_state.json"
   --lookback-days "${SENTINEL_LOOKBACK_DAYS:-7}"`.
 - `config/launchd/com.hivesec.sentinel-feed-refresh.plist` — 21600 s interval, `RunAtLoad`; logs to
   `~/Library/Logs/HiveSecSentinel/`. Absolute paths to `/Users/raf/Code/sentinel` are hard-coded
-  in both the plist and the script. The plist's `EnvironmentVariables` win over the script's
-  defaults, so the live attribution ref is `PUBLIC-PUBLISH-2026-001` from the plist, not the
-  `launchd-kev-refresh` fallback that the script and `docs/ACTIVATION.md` mention.
-- `scripts/migrate_keychain_namespace.sh` — one-time copy from legacy `com.butler.hivesec.*`
-  Keychain services to `com.hivesec.sentinel.*`.
+  in both the plist and the script. The repo plist's `EnvironmentVariables` win over the script's
+  defaults (attribution ref `PUBLIC-PUBLISH-2026-001`), but the plist **installed** in
+  `~/Library/LaunchAgents` (checked 18 Sep 2026) has no `EnvironmentVariables`, so the live job
+  uses the script fallback `launchd-kev-refresh` unless `.env` sets it. Reinstalling the plist
+  means a reload, and `RunAtLoad` makes that a publishing run.
+- `scripts/migrate_keychain_namespace.sh` — historical one-time copy from the legacy Keychain
+  services to `com.hivesec.sentinel.*`.
 - `docs/OPERATIONS.md` has the restart / inspect / recovery `launchctl` commands. Changing the
   state file layout means updating the recovery procedure there.
 
 Changes to the runbooks, plist, or wrapper script affect a live scheduled job on this machine;
 do not reload the LaunchAgent as a side effect of a code change.
 
+## Adelaide report
+
+Adelaide reads only `.adelaide/report.json` (contract v1, /Users/raf/Code/adelaide/docs/REPO_REPORTS.md); this repo keeps ownership of its bot.
+`adelaide.py` writes it (atomic, dir 0700, file 0600, ≤ 20 items, ≤ 64 KiB) at the end of every
+non-dry-run `refresh-kev` — including a KEV health failure — and on demand with
+`hivesec-sentinel adelaide-report --state "<state dir>/feed_state.json"`, which reads only local
+state and sends nothing. Items: one `alert` per alert Telegram accepted in the last 48 h (from the
+receipts, titled from `adelaide_cache.json` — max 50 entries, 7 days, 0600, next to the state
+file; `urgent` when the KEV `dueDate` is under 7 days away, else `high`) plus one `status` item
+(`high` if source health is not ok or the last check is older than 12 h, else `low`). The KEV
+`dueDate` travels beside the alert through `refresh_kev(due_dates=...)`, never inside
+`PublicAlert`. The writer never raises: a failure is one warning log line. Reports older than
+48 h are stale for Adelaide, so the 6-hourly job keeps it fresh while the Mac is awake.
+
 ## Branch note
 
-Work happens on `codex/hivesec-feed-hardening`; `docs/ACTIVATION.md` records that this branch is
-intentionally **not** merged to `main`. Don't merge or rebase onto `main` unless asked.
+`main` is the default branch and what the LaunchAgent runs from the working copy;
+`codex/hivesec-feed-hardening` was merged into it on 18 Sep 2026. Keep the working copy on `main`.

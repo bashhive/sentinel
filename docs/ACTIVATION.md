@@ -1,16 +1,18 @@
 # Activation
 
-HiveSec Sentinel is activated from this repository, independently from Butler.
+HiveSec Sentinel is activated from this repository, independently from any private assistant.
+Adelaide reads only `.adelaide/report.json` (contract v1, /Users/raf/Code/adelaide/docs/REPO_REPORTS.md); this repo keeps ownership of its bot.
 
 ## Deployed state — 2026-07-26
 
 The hardened publisher is committed as
 `ef43d336448fd54f5dc98dda4fdb39b74a725687` on the review branch
 `codex/hivesec-feed-hardening`. It has been pushed to local GitLab and verified
-from a clean clone. The branch is intentionally not merged to `main` here.
+from a clean clone. That branch was merged into `main` on 18 Sep 2026; `main` is
+now the default branch and what the LaunchAgent runs.
 
 Sentinel remains the public publisher. It does not consume private scanner or
-Butler payloads, and no public delivery is implied by repository deployment.
+assistant payloads, and no public delivery is implied by repository deployment.
 Every live publication still requires the `public_brand` profile, policy
 version, and an explicit attribution approval reference.
 
@@ -24,11 +26,16 @@ cd "/Users/raf/Code/sentinel"
 uv sync --extra dev
 ```
 
-The approved secret store supplies dedicated credentials for:
+The scheduled wrapper sources these from the git-ignored repository `.env`
+(since commit 9c16c12; never commit it):
 
 - `HIVESEC_TELEGRAM_BOT_TOKEN`
 - `HIVESEC_TELEGRAM_CHAT_ID`
-- `HIVESEC_GITHUB_TOKEN`
+
+Only when `HIVESEC_SITE_DELIVERY=enabled`, the Worker intake credentials come
+from Keychain (`com.hivesec.sentinel.intake-token`, else the
+`com.hivesec.sentinel.cf-client-id` / `.cf-client-secret` pair). GitHub dispatch
+and `HIVESEC_GITHUB_TOKEN` are retired.
 
 Every live or dry-run invocation also requires:
 
@@ -46,20 +53,17 @@ uv run hivesec-sentinel publish alert.json --dry-run
 
 ## Do not install
 
-Do not configure Butler or Data Breach Scanner credentials here. Deploy only after the public
-site has supplied `HIVESEC_TELEGRAM_BOT_TOKEN`, `HIVESEC_TELEGRAM_CHAT_ID` and
-`HIVESEC_GITHUB_TOKEN` through its approved secret store.
+Do not configure private-assistant or Data Breach Scanner credentials here. Deploy only after
+`HIVESEC_TELEGRAM_BOT_TOKEN` and `HIVESEC_TELEGRAM_CHAT_ID` are present in the repository `.env`.
 
 ## Periodic source validation
 
 `scripts/refresh_public_feed.sh` checks the official CISA Known Exploited Vulnerabilities
 catalog every six hours. It keeps its delivery state under `~/Library/Application Support/HiveSec Sentinel/`
-and retrieves credentials from Keychain at runtime; no secret is stored in the script or plist.
-
-The refresh script uses only `com.hivesec.sentinel.*` Keychain entries. Run the
-one-time namespace migration script before installing the LaunchAgent. The job publishes a new alert only
-after both Telegram and the public-site dispatch succeed, then records it as delivered to prevent
-duplicates.
+and reads the Telegram credentials from the repository `.env` at runtime; no secret is stored
+in the script or plist. Keychain (`com.hivesec.sentinel.*` only) is read solely for the optional
+Worker intake. The job records an alert as delivered as soon as Telegram accepts it
+(`--record-on telegram`), so it is never sent twice.
 
 ## LaunchAgent
 

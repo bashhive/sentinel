@@ -10,6 +10,28 @@ both.
 
 ---
 
+## 2026-09-18 — Adelaide report and `main` as the live branch
+
+### Added
+
+- `.adelaide/report.json` (Adelaide contract v1), written after every
+  non-dry-run `refresh-kev` (also on KEV health failure) and by the new
+  `hivesec-sentinel adelaide-report` subcommand, which reads local state only
+  and sends nothing. Adelaide reads only this file; this repo keeps ownership of
+  `@hivesecsentinelbot`.
+- A bounded title cache, `adelaide_cache.json` next to the feed state (50
+  entries, 7 days, 0600). The KEV `dueDate` is passed beside each alert; the
+  `PublicAlert` contract is unchanged.
+
+### Changed
+
+- `codex/hivesec-feed-hardening` merged into `main`; the working copy the
+  LaunchAgent runs is on `main`.
+- Credential docs now describe what the wrapper does: Telegram values from the
+  repository `.env` (since 9c16c12), Keychain only for the optional intake.
+
+---
+
 ## 2026-09-14 — Canonical Worker feed alignment
 
 ### Changed
