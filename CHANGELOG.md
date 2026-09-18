@@ -29,6 +29,26 @@ both.
   LaunchAgent runs is on `main`.
 - Credential docs now describe what the wrapper does: Telegram values from the
   repository `.env` (since 9c16c12), Keychain only for the optional intake.
+- `ruff format` applied to `src` and `tests` (layout only, no behaviour
+  change). CLAUDE.md lists `ruff format --check` with the lint step; CI still
+  runs only `ruff check`.
+- CLAUDE.md and AGENTS.md no longer say the `.venv` lacks pytest: it now holds
+  the dev extras. `uv sync --extra dev` remains the fix for a rebuilt venv
+  (it still has no pip).
+- The public GitHub mirror (`bashhive/sentinel`) `main` was fast-forwarded to
+  match the GitLab `main`. It had been 24 commits behind and held only the old
+  docs.
+
+### Removed
+
+- The merged `codex/hivesec-feed-hardening` branch, from both GitLab and
+  GitHub. `main` is now the only branch.
+
+### Verified
+
+- `30 passed`, `ruff check` and `ruff format --check` clean; `uv lock --check`
+  consistent; both plists pass `plutil -lint`; `refresh-kev --dry-run` against
+  the live KEV feed reports health `ok`.
 
 ---
 
