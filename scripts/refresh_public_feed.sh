@@ -9,6 +9,12 @@ log_dir="$HOME/Library/Logs/HiveSecSentinel"
 mkdir -p "$state_dir" "$log_dir"
 cd "$repo_dir"
 export PATH="$repo_dir/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+env_file="$repo_dir/.env"
+if [[ -f "$env_file" ]]; then
+  set -a
+  source "$env_file"
+  set +a
+fi
 export SENTINEL_EXECUTION_PROFILE="${SENTINEL_EXECUTION_PROFILE:-public_brand}"
 export SENTINEL_POLICY_VERSION="${SENTINEL_POLICY_VERSION:-execution-profiles-v1}"
 export SENTINEL_ATTRIBUTION_APPROVAL_REF="${SENTINEL_ATTRIBUTION_APPROVAL_REF:-launchd-kev-refresh}"
@@ -28,14 +34,10 @@ if [[ ! -x "$repo_dir/.venv/bin/hivesec-sentinel" ]]; then
   "$python_bin" -m pip install -e "$repo_dir[dev]" >/dev/null
 fi
 
-for service in com.hivesec.sentinel.telegram com.hivesec.sentinel.telegram-chat-id; do
-  if ! security find-generic-password -s "$service" -w >/dev/null 2>&1; then
-    echo "missing Keychain item: $service" >&2
-    exit 1
-  fi
-done
-export HIVESEC_TELEGRAM_BOT_TOKEN="$(security find-generic-password -s com.hivesec.sentinel.telegram -w)"
-export HIVESEC_TELEGRAM_CHAT_ID="$(security find-generic-password -s com.hivesec.sentinel.telegram-chat-id -w)"
+if [[ -z "${HIVESEC_TELEGRAM_BOT_TOKEN:-}" || -z "${HIVESEC_TELEGRAM_CHAT_ID:-}" ]]; then
+  echo "missing HIVESEC_TELEGRAM_BOT_TOKEN or HIVESEC_TELEGRAM_CHAT_ID in $env_file" >&2
+  exit 1
+fi
 
 # Site channel, only when explicitly enabled. Preferred: the bash-site Worker intake, authenticated with a
 # Cloudflare Access service token stored in Keychain as
