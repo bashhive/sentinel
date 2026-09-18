@@ -1,0 +1,50 @@
+# EditorConfig — https://editorconfig.org
+# Added 2026-09-10 (AUDIT_2026-09-10): none of the 15 repositories in ~/Code and
+# ~/SecurityWork had one, so whitespace convention came from whichever editor
+# touched a file last (VS Code, Claude Code, Codex, Copilot).
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# PEP 8.
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+# Google shell style guide; also what shellcheck assumes.
+[*.{sh,bash}]
+indent_size = 4
+
+# YAML cannot use tabs at all, and 2 is the convention for CI files and compose.
+[*.{yml,yaml}]
+indent_size = 2
+
+[*.{json,jsonc,toml}]
+indent_size = 2
+
+[*.{js,jsx,ts,tsx,css,scss,html}]
+indent_size = 2
+
+# Two trailing spaces are a hard line break in Markdown — never trim them here.
+[*.md]
+trim_trailing_whitespace = false
+indent_size = 2
+
+# Makefiles require real tabs.
+[{Makefile,makefile,*.mk}]
+indent_style = tab
+
+# Third-party and generated trees keep whatever they shipped with.
+[{**/vendor/**,**/node_modules/**,**/.venv/**,**/venv*/**,**/tools/darkgpt/**,**/tools/gophish/**,**/archive/**}]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset

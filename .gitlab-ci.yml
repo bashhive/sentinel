@@ -1,0 +1,40 @@
+stages:
+  - validate
+  - test
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+default:
+  image: python:3.12
+  cache:
+    key: "$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cache/pip
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+before_script:
+  - python -m pip install --upgrade pip
+  # The dev extras carry pytest and ruff. Installing without them used to make
+  # the test job pass with zero tests collected.
+  - pip install -e '.[dev]'
+
+validate_repo:
+  stage: validate
+  script:
+    - test -f README.md
+    - test -d docs
+
+lint:
+  stage: validate
+  script:
+    - ruff check src tests
+
+tests:
+  stage: test
+  script:
+    - python -m pytest -q
