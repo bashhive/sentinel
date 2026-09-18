@@ -69,8 +69,18 @@ def save_state(path: Path, state: dict[str, Any]) -> None:
 
 
 def kev_alerts(
-    catalog: dict[str, Any], *, since: date, seen_ids: set[str]
+    catalog: dict[str, Any],
+    *,
+    since: date,
+    seen_ids: set[str],
+    due_dates: dict[str, str] | None = None,
 ) -> list[dict[str, object]]:
+    """Build strict ``PublicAlert`` dicts for new KEV entries.
+
+    ``due_dates``, when given, is filled with ``{alert id: KEV dueDate}`` for the
+    returned alerts. The due date travels beside the alert, never inside it,
+    because ``PublicAlert`` rejects any extra field.
+    """
     vulnerabilities = catalog.get("vulnerabilities")
     if not isinstance(vulnerabilities, list):
         raise TypeError("KEV catalog has no vulnerabilities list")
@@ -98,6 +108,9 @@ def kev_alerts(
             f"Affected: {vendor} {product}. Recommended action: {action}\n\n"
             f"Source: {KEV_URL}"
         )
+        due = item.get("dueDate")
+        if due_dates is not None and isinstance(due, str) and due.strip():
+            due_dates[alert_id] = due.strip()[:10]
         alerts.append(
             {
                 "schema_version": 1,
@@ -122,6 +135,7 @@ def refresh_kev(
     lookback_days: int = 7,
     opener: Callable[..., Any] = urlopen,
     bootstrap: bool = True,
+    due_dates: dict[str, str] | None = None,
 ) -> tuple[list[dict[str, object]], SourceHealth]:
     """Collect eligible KEV entries.
 
@@ -131,6 +145,8 @@ def refresh_kev(
     callers that want it are unaffected. The CLI passes ``bootstrap=False``
     unless ``--bootstrap`` is given, so deleting the state file during recovery
     no longer floods the public channel.
+
+    ``due_dates`` is passed through to :func:`kev_alerts`.
     """
     now = utc_now()
     state = load_state(state_path)
@@ -144,7 +160,7 @@ def refresh_kev(
 
     try:
         catalog = fetch_json(KEV_URL, user_agent=user_agent, opener=opener)
-        alerts = kev_alerts(catalog, since=since, seen_ids=prior_seen)
+        alerts = kev_alerts(catalog, since=since, seen_ids=prior_seen, due_dates=due_dates)
         health = SourceHealth(
             "CISA KEV",
             now.isoformat(),
