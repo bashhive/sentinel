@@ -45,8 +45,12 @@ def write_state(path: Path, *, status: str = "ok", checked: datetime = NOW) -> P
                 "schema_version": 1,
                 "seen_ids": ["hivesec-kev-cve-2026-0001"],
                 "source_health": [
-                    {"name": "CISA KEV", "checked_at": checked.isoformat(),
-                     "status": status, "detail": "HTTP 503"}
+                    {
+                        "name": "CISA KEV",
+                        "checked_at": checked.isoformat(),
+                        "status": status,
+                        "detail": "HTTP 503",
+                    }
                 ],
                 "last_checked_at": checked.isoformat(),
                 "last_published_at": (NOW - timedelta(hours=1)).isoformat(),
@@ -61,18 +65,25 @@ def receipt(directory: Path, alert_id: str, delivered: datetime, channel: str = 
     directory.mkdir(exist_ok=True)
     (directory / f"{alert_id}-{channel}.json").write_text(
         json.dumps(
-            {"public_event_id": alert_id, "channel": channel,
-             "delivered_at": delivered.isoformat()}
+            {"public_event_id": alert_id, "channel": channel, "delivered_at": delivered.isoformat()}
         ),
         encoding="utf-8",
     )
 
 
 def test_kev_due_dates_travel_beside_the_public_alert() -> None:
-    catalog = {"vulnerabilities": [{
-        "cveID": "CVE-2026-1000", "dateAdded": "2026-09-17", "dueDate": "2026-10-08",
-        "vulnerabilityName": "Example", "vendorProject": "V", "product": "P",
-    }]}
+    catalog = {
+        "vulnerabilities": [
+            {
+                "cveID": "CVE-2026-1000",
+                "dateAdded": "2026-09-17",
+                "dueDate": "2026-10-08",
+                "vulnerabilityName": "Example",
+                "vendorProject": "V",
+                "product": "P",
+            }
+        ]
+    }
     due: dict[str, str] = {}
     alerts = kev_alerts(catalog, since=date(2026, 9, 1), seen_ids=set(), due_dates=due)
     assert due == {"hivesec-kev-cve-2026-1000": "2026-10-08"}
@@ -101,8 +112,9 @@ def test_report_contract_priorities_and_ordering(tmp_path: Path) -> None:
     receipts = tmp_path / "receipts"
     remember_delivered(cache, alert("CVE-2026-0002", "Due soon"), "2026-09-22", now=NOW)
     remember_delivered(cache, alert("CVE-2026-0003", "Due later"), "2026-10-09", now=NOW)
-    remember_delivered(cache, alert("CVE-2026-0004", "Old"), "2026-09-19",
-                       now=NOW - timedelta(hours=49))
+    remember_delivered(
+        cache, alert("CVE-2026-0004", "Old"), "2026-09-19", now=NOW - timedelta(hours=49)
+    )
     receipt(receipts, "hivesec-kev-cve-2026-0005", NOW - timedelta(hours=2))
     receipt(receipts, "hivesec-kev-cve-2026-0006", NOW - timedelta(hours=2), channel="site")
 
@@ -160,7 +172,9 @@ def test_report_is_capped_to_twenty_items(tmp_path: Path) -> None:
     state = write_state(tmp_path / "feed_state.json")
     for index in range(30):
         remember_delivered(
-            cache_path_for(state), alert(f"CVE-2026-{index + 200}"), None,
+            cache_path_for(state),
+            alert(f"CVE-2026-{index + 200}"),
+            None,
             now=NOW - timedelta(minutes=index),
         )
     report = build_report(state_path=state, receipt_dir=tmp_path / "none", now=NOW)
@@ -242,7 +256,8 @@ def test_refresh_kev_writes_report_on_health_failure(tmp_path: Path, monkeypatch
     monkeypatch.setenv("SENTINEL_ATTRIBUTION_APPROVAL_REF", "TEST-REF-001")
     reports: list[Path] = []
     monkeypatch.setattr(
-        cli, "refresh_kev",
+        cli,
+        "refresh_kev",
         lambda **_: ([], SourceHealth("CISA KEV", NOW.isoformat(), "error", "HTTP 503")),
     )
     monkeypatch.setattr(cli, "write_report", lambda *, state_path: reports.append(state_path))

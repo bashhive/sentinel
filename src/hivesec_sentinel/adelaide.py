@@ -208,18 +208,19 @@ def _alert_items(
     for alert_id, moment in delivered.items():
         entry = by_id.get(alert_id, {})
         cve = cve_from_id(alert_id)
-        title = sanitize(str(entry.get("title") or ""), maximum=TITLE_MAX) or (
-            f"CISA KEV: {cve}" if cve else f"HiveSec Sentinel alert {alert_id}"
-        )[:TITLE_MAX]
+        title = (
+            sanitize(str(entry.get("title") or ""), maximum=TITLE_MAX)
+            or (f"CISA KEV: {cve}" if cve else f"HiveSec Sentinel alert {alert_id}")[:TITLE_MAX]
+        )
         summary = sanitize(str(entry.get("summary") or ""), maximum=SUMMARY_MAX) or (
             f"CISA has added {cve} to its Known Exploited Vulnerabilities catalog."
             if cve
             else "Public alert delivered to @hivesecsentinelbot."
         )
         due = _valid_date(entry.get("due_date"))
-        urgent = due is not None and (
-            date.fromisoformat(due) - now.date()
-        ).days < URGENT_WITHIN_DAYS
+        urgent = (
+            due is not None and (date.fromisoformat(due) - now.date()).days < URGENT_WITHIN_DAYS
+        )
         item = {
             "title": title,
             "priority": "urgent" if urgent else "high",

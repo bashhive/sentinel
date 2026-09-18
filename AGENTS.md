@@ -24,5 +24,5 @@
   the exception and return `False`, but it must log the channel, host and real
   status or exception type first.
 - Use `.venv/bin/python -m pytest` as the test gate. The virtualenv is
-  uv-managed and ships neither pip nor pytest, so run `uv sync --extra dev`
-  first (or `uv run --extra dev pytest -q`).
+  uv-managed and ships no pip; if pytest is missing from it, run
+  `uv sync --extra dev` first (or `uv run --extra dev pytest -q`).

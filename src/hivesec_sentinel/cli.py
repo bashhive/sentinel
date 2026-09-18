@@ -132,13 +132,9 @@ def main(argv: list[str] | None = None) -> int:
                 # channel we record on is never re-sent because a later alert
                 # or another channel failed.
                 record_published(args.state, [value])
-                remember_delivered(
-                    cache_path_for(args.state), value, due_dates.get(alert.id)
-                )
+                remember_delivered(cache_path_for(args.state), value, due_dates.get(alert.id))
             if not all(outcome.values()):
-                rejected = ", ".join(
-                    channel for channel, ok in outcome.items() if not ok
-                )
+                rejected = ", ".join(channel for channel, ok in outcome.items() if not ok)
                 print(
                     f"publication failed for {alert.id}: channel(s) {rejected} "
                     f"(recorded as seen: {recorded})",

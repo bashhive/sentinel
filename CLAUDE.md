@@ -41,9 +41,10 @@ The repo venv at `.venv` is the canonical interpreter (the LaunchAgent wrapper d
 `AGENTS.md` names `.venv/bin/python -m pytest` as the test gate.
 
 ```bash
-# one-time setup. The existing .venv was created by uv (Python 3.13) and has
-# neither pip nor pytest in it, so `.venv/bin/python -m pytest` fails and
-# `python -m pip` answers "No module named pip". Populate it with uv:
+# one-time setup. The .venv was created by uv (Python 3.13) and has no pip
+# (`python -m pip` answers "No module named pip"). Since 18 Sep 2026 it already
+# holds the dev extras (pytest, ruff); if they go missing after a rebuild,
+# `.venv/bin/python -m pytest` fails. Repopulate it with uv:
 uv sync --extra dev            # or: uv run --extra dev pytest -q, to touch nothing
 # Only if you rebuild the venv with stdlib venv instead of uv:
 #   python3.11 -m venv .venv && .venv/bin/python -m pip install -e '.[dev]'
@@ -55,6 +56,7 @@ uv sync --extra dev            # or: uv run --extra dev pytest -q, to touch noth
 
 # lint (ruff, line-length 100, py311 target)
 .venv/bin/ruff check src tests
+.venv/bin/ruff format --check src tests   # not enforced by CI, but keep it clean
 
 # CLI dry runs (need the SENTINEL_* env below; no HIVESEC_* credentials needed for --dry-run)
 .venv/bin/hivesec-sentinel publish alert.json --dry-run

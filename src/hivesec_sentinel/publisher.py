@@ -17,12 +17,23 @@ _SEVERITIES = {"info", "warning", "critical"}
 _SAFE_ID = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 _ISO_TZ = re.compile(r"(?:Z|[+-]\d{2}:?\d{2})$", re.IGNORECASE)
 _ALERT_FIELDS = {
-    "schema_version", "id", "title", "message", "severity", "source",
+    "schema_version",
+    "id",
+    "title",
+    "message",
+    "severity",
+    "source",
     "published_at",
 }
 _PRIVATE_FIELDS = {
-    "victim", "email", "phone", "watchlist", "credential", "credentials",
-    "private_outbox", "personal_data",
+    "victim",
+    "email",
+    "phone",
+    "watchlist",
+    "credential",
+    "credentials",
+    "private_outbox",
+    "personal_data",
 }
 
 
@@ -249,19 +260,27 @@ class Publisher:
         except HTTPError as error:
             logger.warning(
                 "delivery failed: channel=%s host=%s status=%s reason=http_error",
-                channel, host, error.code,
+                channel,
+                host,
+                error.code,
             )
             return False
         except (URLError, TimeoutError, OSError) as error:
             logger.warning(
                 "delivery failed: channel=%s host=%s reason=%s detail=%.120s",
-                channel, host, type(error).__name__, error,
+                channel,
+                host,
+                type(error).__name__,
+                error,
             )
             return False
         if status != expected:
             logger.warning(
                 "delivery rejected: channel=%s host=%s status=%s expected=%s",
-                channel, host, status, expected,
+                channel,
+                host,
+                status,
+                expected,
             )
             return False
         logger.info("delivery accepted: channel=%s host=%s status=%s", channel, host, status)
